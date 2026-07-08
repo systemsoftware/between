@@ -4,6 +4,14 @@ An end-to-end encrypted, peer-to-peer chat application built with **SwiftUI** an
 
 This repository contains both the iOS client application and a lightweight Node.js signaling server used for the initial peer discovery. Once peers are connected, the signaling server is dropped and all communication happens directly over a secure WebRTC data channel.
 
+## Screenshots
+
+<p align="center">
+  <img src="images/connect.png" alt="Connect Screen" width="30%">
+  <img src="images/chat.png" alt="Contact Screen" width="30%">
+  <img src="images/contact.png" alt="Chat Screen" width="30%">
+</p>
+
 ## Features
 
 - **Peer-to-Peer Communication:** Direct connection between clients via WebRTC data channels.
@@ -26,6 +34,11 @@ This repository contains both the iOS client application and a lightweight Node.
 - **Signaling Server:**
   - Node.js (v14 or later)
   - npm
+
+## Public Signaling Server
+
+By default, the iOS app connects to a small public signaling server hosted on an Oracle Cloud Infrastructure (OCI) instance at `ws://150.230.37.157:3030/`. 
+This allows you to test the app immediately without needing to run your own server. Because the signaling server only facilitates the initial peer discovery handshake and does not see or store any of the encrypted chat messages, it is completely secure to use this public instance. However, you can also run your own local signaling server if you prefer, as described below.
 
 ## Getting Started
 
@@ -56,6 +69,13 @@ The signaling server will start listening on `ws://0.0.0.0:3030`.
 2. **Handshake:** When connecting to a peer, the app generates a WebRTC offer and sends it through the signaling server to the target client. The target replies with an answer, and both exchange ICE candidates to discover the optimal network path.
 3. **P2P Connection:** Once the `RTCDataChannel` opens, the app disconnects from the signaling server. 
 4. **Messaging:** All subsequent messages (e.g., chat messages, typing indicators) are encrypted and sent directly over the P2P connection, bypassing any central server.
+
+## Contact System
+
+Because WebRTC IDs are long, cryptographic public keys, the app includes a built-in contact system. 
+- You can save a peer's ID as a **Contact** with a human-readable name and an optional profile picture.
+- Contacts are integrated into the chat history, so you see friendly names and avatars instead of raw IDs.
+- Like messages, all contact data is stored securely and locally on your device.
 
 ## Data Management
 

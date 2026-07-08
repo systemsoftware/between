@@ -71,27 +71,26 @@ struct ConnectView: View {
                             .autocorrectionDisabled()
                         Button {
                             connected = false
+                            showError = false
                             if let url = URL(string:signalServer) {
                                 status = "Setting signaling server"
                                 webRTC.setSignalingServer(url)
                                 status = "Pinging signaling server"
                                 Task {
-                                    let reachable = await ping(url)
+                                    let pong = await ping(url)
                                     
-                                    if reachable {
+                                    if pong {
                                         status = "Registering with signaling server"
                                         webRTC.register()
                                         status = "Connected to signaling server"
                                         connected = true
                                     } else {
-                                        errorText = "Signaling server not reachable"
+                                        status = "Signaling server not reachable"
                                         showError = true
-                                        status = ""
                                     }
                                 }
                             } else {
-                                errorText = "Invalid URL"
-                                status = ""
+                                status = "Invalid URL"
                                 showError = true
                             }
                         } label: {
@@ -126,8 +125,7 @@ struct ConnectView: View {
                                     webRTC.connectedTo = connectTo
                                     webRTC.connect(toUserId: connectTo)
                                 } else {
-                                    status = ""
-                                    errorText = "Signaling server not reachable"
+                                    status = "Signaling server not reachable"
                                     showError = true
                                 }
                             }
@@ -143,8 +141,11 @@ struct ConnectView: View {
                 
                 if !status.isEmpty {
                     HStack {
-                        if !connected {
+                        if !connected && !showError {
                             ProgressView()
+                        } else if showError {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.red)
                         } else {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
@@ -162,29 +163,35 @@ struct ConnectView: View {
         }
         .padding()
         .animation(.smooth, value: connectTo)
-        .alert("Alert",isPresented: $showError) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorText)
-        }
         .onAppear {
-            guard let url = URL(string:signalServer) else {
-                errorText = "Invalid URL"
-                status = ""
-                showError = true
-                return
-            }
-            status = "Setting signaling server"
-            webRTC.setSignalingServer(url)
-            status = "Set signaling server"
-            let key = loadP256KeyAgreementPrivateKey(account:Config.appGroupIdentifier)
-            if let publicKey = key?.publicKey {
-                pubKey = publicKey.rawRepresentation.base64EncodedString()
-                webRTC.localClientId = pubKey
-                status = "Registering with signaling server"
-                webRTC.register()
-                status = "Connected to signaling server"
-                connected = true
+            Task {
+                guard let url = URL(string:signalServer) else {
+                    errorText = "Invalid URL"
+                    status = "Invalid URL"
+                    showError = true
+                    return
+                }
+                
+                status = "Setting signaling server"
+                webRTC.setSignalingServer(url)
+                status = "Pinging signaling server"
+                
+                let key = loadP256KeyAgreementPrivateKey(account:Config.appGroupIdentifier)
+                if let publicKey = key?.publicKey {
+                    pubKey = publicKey.rawRepresentation.base64EncodedString()
+                    webRTC.localClientId = pubKey
+                    let pong = await ping(url)
+
+                    if pong {
+                        status = "Registering with signaling server"
+                        webRTC.register()
+                        status = "Connected to signaling server"
+                        connected = true
+                    } else {
+                        showError = true
+                        status = "Signaling server not reachable"
+                    }
+                }
             }
         }
         .navigationTitle("Between")
@@ -230,8 +237,7 @@ struct ConnectView: View {
                         try modelContext.delete(model: Message.self)
                         try modelContext.save()
                     } catch {
-                        errorText = error.localizedDescription
-                        status = ""
+                        status = error.localizedDescription
                         showError = true
                     }
                     
