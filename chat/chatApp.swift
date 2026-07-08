@@ -1,18 +1,12 @@
-//
-//  chatApp.swift
-//  chat
-//
-//  Created by Bryce Agostini on 7/7/26.
-//
-
 import SwiftUI
 import SwiftData
 
 @main
 struct chatApp: App {
+        
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Message.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

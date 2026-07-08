@@ -1,80 +1,41 @@
-//
-//  ContentView.swift
-//  chat
-//
-//  Created by Bryce Agostini on 7/7/26.
-//
-
 import SwiftUI
 import SwiftData
 
+
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
-
+ 
+    @StateObject var webRTC = WebRTCManager()
+    @Environment(\.modelContext) var modelContext
+    
+    @State var showWipeAlert = false
+    
     var body: some View {
-        NavigationViewWrapper {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        if !webRTC.isPeerConnected {
+            ConnectView(webRTC: webRTC)
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ChatView(webRTC: webRTC, searchTarget: webRTC.connectedTo, searchTarget2: webRTC.localClientId)
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onTapGesture(count: 2) {
+                  showWipeAlert = true
+               }
+            .alert("Are you sure you want to wipe all conversations?", isPresented: $showWipeAlert) {
+                Button("Yes") {
+                    Task {
+                        do {
+                            try modelContext.container.erase()
+                        } catch {
+                            print(error)
+                        }
                     }
                 }
-                .onDelete(perform: deleteItems)
-            }
-#if os(macOS)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-#endif
-            .toolbar {
-#if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-#endif
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
+                Button("No", role: .cancel) {
+                    
                 }
             }
         }
     }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
-        }
-    }
-}
-
-fileprivate struct NavigationViewWrapper<Content: View>: View {
-    let content: () -> Content
-
-    var body: some View {
-#if os(macOS)
-        NavigationSplitView {
-            content()
-        } detail: {
-            Text("Select an item")
-        }
-#else
-        content()
-#endif
-    }
-}
-
-#Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+    
 }
