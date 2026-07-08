@@ -13,10 +13,6 @@ struct ConnectView: View {
     
     @AppStorage("signalServer", store:Config.sharedDefaults) var signalServer = DEFAULT_SIGNAL_SERVER
     
-    @State private var showConnectionAlert = false
-    @State private var pendingConnectionId: String? = nil
-    @State var connectionDecisionCallback: ((Bool) -> Void)? = nil
-    
     @State var showHistory = false
     @State var showReset = false
     
@@ -28,8 +24,12 @@ struct ConnectView: View {
     @State var showError = false
     @State var errorText = ""
     
-    var body: some View {
+    @State var status = ""
+    
+    @State var connected = false
         
+    var body: some View {
+                
         VStack(spacing: 24) {
             // Public Key
             VStack(alignment: .leading, spacing: 8) {
@@ -70,22 +70,28 @@ struct ConnectView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                         Button {
+                            connected = false
                             if let url = URL(string:signalServer) {
+                                status = "Setting signaling server"
                                 webRTC.setSignalingServer(url)
+                                status = "Pinging signaling server"
                                 Task {
                                     let reachable = await ping(url)
                                     
                                     if reachable {
+                                        status = "Registering with signaling server"
                                         webRTC.register()
-                                        errorText = "Connected"
-                                        showError = true
+                                        status = "Connected to signaling server"
+                                        connected = true
                                     } else {
                                         errorText = "Signaling server not reachable"
                                         showError = true
+                                        status = ""
                                     }
                                 }
                             } else {
                                 errorText = "Invalid URL"
+                                status = ""
                                 showError = true
                             }
                         } label: {
@@ -106,24 +112,25 @@ struct ConnectView: View {
                 }
 
                 Button {
-                    if let url = URL(string:signalServer) {
-                        Task {
+                        if let url = URL(string:signalServer) {
+                            status = "Setting signaling server"
                             webRTC.setSignalingServer(url)
-                            
-                            let reachable = await ping(url)
-                            
-                            if reachable {
-                                webRTC.register()
-                                webRTC.connectedTo = connectTo
-                                webRTC.connect(toUserId: connectTo)
-                            } else {
-                                errorText = "Signaling server not reachable"
-                                showError = true
+                            status = "Pinging signaling server"
+                            Task {
+                                let reachable = await ping(url)
+                                
+                                if reachable {
+                                    status = "Registering with signaling server"
+                                    webRTC.register()
+                                    status = "Connecting..."
+                                    webRTC.connectedTo = connectTo
+                                    webRTC.connect(toUserId: connectTo)
+                                } else {
+                                    status = ""
+                                    errorText = "Signaling server not reachable"
+                                    showError = true
+                                }
                             }
-                        }
-                    } else {
-                        errorText = "Invalid URL"
-                        showError = true
                     }
                 } label: {
                     Label("Connect", systemImage: "arrow.right.circle.fill")
@@ -133,6 +140,21 @@ struct ConnectView: View {
                 }
                 .buttonStyle(.glassProminent)
 
+                
+                if !status.isEmpty {
+                    HStack {
+                        if !connected {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                        Text(status)
+                            .frame(alignment: .center)
+                        Spacer()
+                    }
+                }
+                
             }
             .padding(20)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28))
@@ -148,23 +170,21 @@ struct ConnectView: View {
         .onAppear {
             guard let url = URL(string:signalServer) else {
                 errorText = "Invalid URL"
+                status = ""
                 showError = true
                 return
             }
+            status = "Setting signaling server"
             webRTC.setSignalingServer(url)
+            status = "Set signaling server"
             let key = loadP256KeyAgreementPrivateKey(account:Config.appGroupIdentifier)
             if let publicKey = key?.publicKey {
                 pubKey = publicKey.rawRepresentation.base64EncodedString()
                 webRTC.localClientId = pubKey
+                status = "Registering with signaling server"
                 webRTC.register()
-                
-                webRTC.incomingConnectionRequest = { peerId, completion in
-                    DispatchQueue.main.async {
-                        self.pendingConnectionId = peerId
-                        self.connectionDecisionCallback = completion
-                        self.showConnectionAlert = true
-                    }
-                }
+                status = "Connected to signaling server"
+                connected = true
             }
         }
         .navigationTitle("Between")
@@ -187,20 +207,20 @@ struct ConnectView: View {
                 }
             }
         }
-        .alert("Incoming Connection", isPresented: $showConnectionAlert) {
+        .alert("Incoming Connection", isPresented: $webRTC.showConnectionAlert) {
             Button("Accept") {
-                connectionDecisionCallback?(true)
-                webRTC.connectedTo = pendingConnectionId ?? ""
-                connectionDecisionCallback = nil
-                pendingConnectionId = nil
+                webRTC.connectionDecisionCallback?(true)
+                webRTC.connectedTo = webRTC.incomingConnectionPeerId ?? ""
+                webRTC.connectionDecisionCallback = nil
+                webRTC.incomingConnectionPeerId = nil
             }
             Button("Reject", role: .cancel) {
-                connectionDecisionCallback?(false)
-                connectionDecisionCallback = nil
-                pendingConnectionId = nil
+                webRTC.connectionDecisionCallback?(false)
+                webRTC.connectionDecisionCallback = nil
+                webRTC.incomingConnectionPeerId = nil
             }
         } message: {
-            Text("\(pendingConnectionId ?? "Someone") is requesting to connect.")
+            Text("\(webRTC.incomingConnectionPeerId ?? "Someone") is requesting to connect.")
         }
         .alert("New ID", isPresented: $showReset) {
             Button("Yes") {
@@ -211,6 +231,7 @@ struct ConnectView: View {
                         try modelContext.save()
                     } catch {
                         errorText = error.localizedDescription
+                        status = ""
                         showError = true
                     }
                     

@@ -79,8 +79,9 @@ final class WebRTCManager: NSObject, ObservableObject {
     /// they're consumed internally over the signaling socket.
     var onMessage: ((Event) -> Void)?
 
-    /// Fired when an incoming offer is received. The callback must be invoked with `true` to accept, or `false` to reject.
-    var incomingConnectionRequest: ((_ peerId: String, _ completion: @escaping (Bool) -> Void) -> Void)?
+    @Published var showConnectionAlert = false
+    @Published var incomingConnectionPeerId: String? = nil
+    var connectionDecisionCallback: ((Bool) -> Void)? = nil
 
     var localClientId: String
     @Published private(set) var isPeerConnected = false
@@ -271,19 +272,17 @@ final class WebRTCManager: NSObject, ObservableObject {
             guard let sdp = message.sdp, let from = message.from else { return }
             
             // Ask the app layer if we should accept this connection
-            if let requestHandler = incomingConnectionRequest {
-                requestHandler(from) { [weak self] accepted in
+            DispatchQueue.main.async {
+                self.incomingConnectionPeerId = from
+                self.connectionDecisionCallback = { [weak self] accepted in
                     guard let self = self else { return }
                     if accepted {
                         self.acceptOffer(from: from, sdp: sdp)
                     } else {
-                        // If rejected, we can either send a custom reject signal or just do nothing.
                         debugPrint("WebRTCManager: Connection from \(from) rejected by user.")
                     }
                 }
-            } else {
-                // Auto-accept if no handler is provided
-                acceptOffer(from: from, sdp: sdp)
+                self.showConnectionAlert = true
             }
 
         case "answer":
