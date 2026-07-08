@@ -17,6 +17,7 @@ struct ConnectView: View {
     @State var connectionDecisionCallback: ((Bool) -> Void)? = nil
     
     @State var showHistory = false
+    @State var showReset = false
     
     @Environment(\.modelContext) var modelContext
     @Query var messages: [Message]
@@ -24,7 +25,6 @@ struct ConnectView: View {
     var body: some View {
         
         VStack(spacing: 24) {
-
             // Public Key
             VStack(alignment: .leading, spacing: 8) {
                 Text("Your ID")
@@ -53,6 +53,10 @@ struct ConnectView: View {
             // Connection
             VStack(spacing: 16) {
 
+                Text("Connect")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
                 VStack {
                     Label("Signal Server", image:"server.rack")
                         .font(.caption)
@@ -70,8 +74,14 @@ struct ConnectView: View {
                 }
 
                 Button {
-                    webRTC.connectedTo = connectTo
-                    webRTC.connect(toUserId: connectTo)
+                    if let url = URL(string:signalServer) {
+                        webRTC.setSignalingServer(url)
+                        webRTC.register()
+                        webRTC.connectedTo = connectTo
+                        webRTC.connect(toUserId: connectTo)
+                    } else {
+                        print("Invalid URL")
+                    }
                 } label: {
                     Label("Connect", systemImage: "arrow.right.circle.fill")
                         .fontWeight(.semibold)
@@ -93,7 +103,7 @@ struct ConnectView: View {
             }
         }
         .onAppear {
-            guard let url = URL(string:"ws://192.168.1.89:3030") else { print("Invalid URl"); return }
+            guard let url = URL(string:signalServer) else { print("Invalid URl"); return }
             webRTC.setSignalingServer(url)
             let key = loadP256KeyAgreementPrivateKey(account:Config.appGroupIdentifier)
             if let publicKey = key?.publicKey {
@@ -110,7 +120,16 @@ struct ConnectView: View {
                 }
             }
         }
+        .navigationTitle("Between")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            
+            Button {
+                showReset = true
+            } label: {
+                Image(systemName: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
+            }
+            
             Button() {
                 showHistory = true
             } label: {
@@ -132,6 +151,31 @@ struct ConnectView: View {
         } message: {
             Text("\(pendingConnectionId ?? "Someone") is requesting to connect.")
         }
+        .alert("New ID", isPresented: $showReset) {
+            Button("Yes") {
+                if deleteP256KeyAgreementPrivateKey(account: Config.appGroupIdentifier) {
+                    
+                    do {
+                        try modelContext.delete(model: Message.self)
+                        try modelContext.save()
+                    } catch {
+                        print(error)
+                    }
+                    
+                    let key = loadP256KeyAgreementPrivateKey(account:Config.appGroupIdentifier)
+                    if let publicKey = key?.publicKey {
+                        pubKey = publicKey.rawRepresentation.base64EncodedString()
+                        webRTC.localClientId = pubKey
+                        webRTC.register()
+                    }
+                }
+            }
+            Button("No", role: .cancel) {
+              
+            }
+        } message: {
+            Text("Are you sure you want to get a new ID? This will delete all conversations and make you no longer reachable at your current ID.")
+        }
         .sheet(isPresented: $showHistory) {
             NavigationStack {
                 let uniqueConversations = messages
@@ -143,22 +187,31 @@ struct ConnectView: View {
                         }
                     }
                 
-                List(uniqueConversations) { msg in
-                    let peer = msg.from == webRTC.localClientId ? msg.to : msg.from
-                    NavigationLink(peer, value: msg)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                deleteMessages(from: peer)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                if uniqueConversations.count > 0 {
+                    
+                    List(uniqueConversations) { msg in
+                        let peer = msg.from == webRTC.localClientId ? msg.to : msg.from
+                        NavigationLink(peer, value: msg)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    deleteMessages(from: peer)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
-                        }
+                    }
+                    .navigationDestination(for: Message.self) { msg in
+                        let peer = msg.from == webRTC.localClientId ? msg.to : msg.from
+                        ChatView(webRTC: webRTC, searchTarget: peer, searchTarget2: webRTC.localClientId, isViewingHistory: true)
+                    }
+                    .navigationTitle("Chat History")
+                } else {
+                    ContentUnavailableView {
+                        Label("No chat history", systemImage: "clock.badge.xmar")
+                    } description: {
+                        Text("New chats you create will appear here.")
+                    }
                 }
-                .navigationDestination(for: Message.self) { msg in
-                    let peer = msg.from == webRTC.localClientId ? msg.to : msg.from
-                    ChatView(webRTC: webRTC, searchTarget: peer, searchTarget2: webRTC.localClientId, isViewingHistory: true)
-                }
-                .navigationTitle("Chat History")
             }
         }
     }

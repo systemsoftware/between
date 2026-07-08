@@ -123,3 +123,24 @@ func decryptP2PMessage(_ encryptedBundleBase64: String, peerPublicKeyBase64: Str
 func getPublicKey(from privateSecKey: SecKey) -> SecKey? {
     return SecKeyCopyPublicKey(privateSecKey)
 }
+
+func deleteP256KeyAgreementPrivateKey(account: String) -> Bool {
+    let tagData = Data(account.utf8)
+    let query: [String: Any] = [
+        kSecClass as String: kSecClassKey,
+        kSecAttrApplicationTag as String: tagData
+    ]
+    
+    let status = SecItemDelete(query as CFDictionary)
+    
+    if status == errSecSuccess {
+        print("Successfully deleted key for account: \(account)")
+        return true
+    } else if status == errSecItemNotFound {
+        print("Key not found in keychain for account: \(account)")
+        return true
+    } else {
+        print("Failed to delete key with status: \(status)")
+        return false
+    }
+}

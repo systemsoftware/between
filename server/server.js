@@ -1,11 +1,17 @@
 const WebSocket = require('ws');
+const http = require('http');
+
+const server = http.createServer();
 
 const port = 3030;
-const wss = new WebSocket.Server({ port, host: '0.0.0.0' }, () => {
-  console.log(`Signaling server listening on ws://0.0.0.0:${port}`);
-});
+const wss = new WebSocket.Server({ server });
 
 const clients = new Map();
+
+server.on('request', (req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Signal Server is running\n');
+});
 
 wss.on('connection', (ws) => {
   console.log('New client connected.');
@@ -45,4 +51,9 @@ wss.on('connection', (ws) => {
       }
     }
   });
+});
+
+
+server.listen(port, "0.0.0.0", () => {
+  console.log(`Signaling server listening on :${port}`);
 });

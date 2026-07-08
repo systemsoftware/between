@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-let DEFAULT_SIGNAL_SERVER = "ws://192.168.1.89:3030"
+let DEFAULT_SIGNAL_SERVER = "ws://150.230.37.157:3030/"
 
 enum Config {
     static let appGroupIdentifier = "com.bryce.chat"
