@@ -3,10 +3,9 @@ const WebSocket = require('ws');
 const port = 3030;
 const wss = new WebSocket.Server({ port, host: '0.0.0.0' }, () => {
   console.log(`Signaling server listening on ws://0.0.0.0:${port}`);
-  console.log('Ensure your iPhone uses your Mac\'s local IP address instead of localhost!');
 });
 
-const clients = new Map(); // Maps 'from' ID to their WebSocket connection
+const clients = new Map();
 
 wss.on('connection', (ws) => {
   console.log('New client connected.');
@@ -21,7 +20,6 @@ wss.on('connection', (ws) => {
           console.log(`Registered client: ${msg.from}`);
         }
       } else {
-        // Forward message to the target client
         if (msg.to && clients.has(msg.to)) {
           const targetSocket = clients.get(msg.to);
           if (targetSocket.readyState === WebSocket.OPEN) {
@@ -39,7 +37,6 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     console.log('Client disconnected.');
-    // Remove the socket from our map
     for (const [id, socket] of clients.entries()) {
       if (socket === ws) {
         clients.delete(id);

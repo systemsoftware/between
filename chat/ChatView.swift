@@ -292,7 +292,7 @@ struct ChatView: View {
                 }
                 showRename = true
             } label: {
-                Image(systemName: "pencil")
+                Image(systemName: "info.circle")
             }
             
             

@@ -13,7 +13,7 @@ protocol WebRTCManagerDelegate: AnyObject {
 /// Wire format used only between this client and the signaling server.
 /// `type` is one of: "register", "offer", "answer", "candidate".
 /// This never travels over the P2P data channel - only app-level `Event`s do.
-private struct SignalingMessage: Codable, @unchecked Sendable {
+private struct SignalingMessage: Codable {
     let type: String
     let from: String?
     let to: String?

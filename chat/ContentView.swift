@@ -22,7 +22,7 @@ struct ContentView: View {
                     .onTapGesture(count: 2) {
                         showWipeAlert = true
                     }
-                    .alert("Are you sure you want to wipe all conversations?", isPresented: $showWipeAlert) {
+                    .alert("What do you want to wipe?", isPresented: $showWipeAlert) {
                         wipeAlert()
                     }
             }
