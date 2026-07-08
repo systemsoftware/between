@@ -10,32 +10,69 @@ struct ContentView: View {
     @State var showWipeAlert = false
     
     var body: some View {
-        if !webRTC.isPeerConnected {
-            ConnectView(webRTC: webRTC)
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ChatView(webRTC: webRTC, searchTarget: webRTC.connectedTo, searchTarget2: webRTC.localClientId)
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onTapGesture(count: 2) {
-                  showWipeAlert = true
-               }
-            .alert("Are you sure you want to wipe all conversations?", isPresented: $showWipeAlert) {
-                Button("Yes") {
-                    Task {
-                        do {
-                            try modelContext.container.erase()
-                        } catch {
-                            print(error)
+        NavigationStack {
+            if !webRTC.isPeerConnected {
+                ConnectView(webRTC: webRTC)
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ChatView(webRTC: webRTC, searchTarget: webRTC.connectedTo, searchTarget2: webRTC.localClientId)
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onTapGesture(count: 2) {
+                        showWipeAlert = true
+                    }
+                    .alert("Are you sure you want to wipe all conversations?", isPresented: $showWipeAlert) {
+                        wipeAlert()
+                    }
+            }
+        }
+        .onAppear {
+            webRTC.onMessage = { event in
+                DispatchQueue.main.async {
+                    if event.type == .send {
+                        if let decrypted = decryptP2PMessage(event.payload, peerPublicKeyBase64: webRTC.connectedTo) {
+                            let msg = Message(content: decrypted, from: webRTC.connectedTo, to: webRTC.localClientId)
+                            modelContext.insert(msg)
+                            try? modelContext.save()
                         }
                     }
                 }
-                Button("No", role: .cancel) {
-                    
+            }
+        }
+    }
+    
+}
+
+struct wipeAlert: View {
+    
+    @Environment(\.modelContext) var modelContext
+    
+    var body: some View {
+        Button("Messages") {
+            Task {
+                do {
+                    try modelContext.delete(model: Message.self)
+                    try modelContext.save()
+                } catch {
+                    print(error)
                 }
             }
         }
+        Button("Contacts") {
+            Task {
+                do {
+                    try modelContext.delete(model: Contact.self)
+                    try modelContext.save()
+                } catch {
+                    print(error)
+                }
+            }
+        }
+        Button("Cancel", role: .cancel) {
+            
+        }
+        
     }
     
 }

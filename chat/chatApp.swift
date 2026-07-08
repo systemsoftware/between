@@ -7,6 +7,7 @@ struct chatApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Message.self,
+            Contact.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
