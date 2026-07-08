@@ -15,11 +15,14 @@ struct ContentView: View {
                 ConnectView(webRTC: webRTC)
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onTapGesture(count: 3) {
+                        showWipeAlert = true
+                    }
             } else {
                 ChatView(webRTC: webRTC, searchTarget: webRTC.connectedTo, searchTarget2: webRTC.localClientId)
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onTapGesture(count: 2) {
+                    .onTapGesture(count: 3) {
                         showWipeAlert = true
                     }
                     .alert("What do you want to wipe?", isPresented: $showWipeAlert) {

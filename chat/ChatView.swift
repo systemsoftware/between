@@ -22,6 +22,8 @@ struct ChatView: View {
     @State private var contactImageItem: PhotosPickerItem?
     @State private var contactImageData: Data?
     
+    @State private var previewImage: UIImage?
+    @State private var showPreviewImage: Bool = false
     
     let searchTarget: String
     let searchTarget2: String
@@ -52,72 +54,13 @@ struct ChatView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ForEach(messages) { msg in
-                    let isMe = msg.from != searchTarget
-
-                    VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
-                        if !isMe {
-                            HStack {
-                                Color.clear.frame(width: 30, height: 0)
-                                Text(
-                                    contacts.first(where: { $0.webRTCId == msg.from })?.humanName ?? ""
-                                )
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                        }
-
-                        HStack(alignment: .center) {
-                            if isMe {
-                                Spacer(minLength: 50)
-                            } else {
-                                if let contact = contacts.first(where: { $0.webRTCId == msg.from }),
-                                   let imgData = contact.image,
-                                   let uiImage = UIImage(data: imgData) {
-                                    Image(uiImage: uiImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 30, height: 30)
-                                        .clipShape(Circle())
-                                        .foregroundStyle(.gray)
-                                } else {
-                                    Image(systemName: "person.circle.fill")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 30, height: 30)
-                                        .foregroundStyle(.gray)
-                                }
-                            }
-
-                            if msg.content.hasPrefix("B64__IMAGE:"),
-                               let base64String = msg.content.components(separatedBy: "B64__IMAGE:").last,
-                               let data = Data(base64Encoded: base64String),
-                               let uiImage = UIImage(data: data) {
-                                
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(maxWidth: 200, maxHeight: 200)
-                                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                            } else {
-                                Text(msg.content)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 10)
-                                    .background(
-                                        isMe
-                                        ? Color.accentColor
-                                        : Color.gray.opacity(0.2)
-                                    )
-                                    .foregroundStyle(isMe ? .white : .primary)
-                                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                            }
-
-                            if !isMe {
-                                Spacer(minLength: 50)
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
+                    MessageRowView(
+                        msg: msg,
+                        searchTarget: searchTarget,
+                        contacts: contacts,
+                        previewImage: $previewImage,
+                        showPreviewImage: $showPreviewImage
+                    )
                 }
             }
             .padding(.vertical)
@@ -155,37 +98,26 @@ struct ChatView: View {
             }
         }
         .padding(.horizontal)
+        .sheet(isPresented: $showPreviewImage) {
+            if let img = previewImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .padding()
+            }
+        }.onChange(of: showPreviewImage) { _, n in
+            if !n {
+                previewImage = nil
+            }
+        }
         .sheet(isPresented: $showRename) {
             NavigationStack {
                 Form {
                     Section("Info") {
-                        HStack {
-                            if let contactImageData, let uiImage = UIImage(data: contactImageData) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 50, height: 50)
-                                    .clipShape(Circle())
-                            } else {
-                                Image(systemName: "person.circle.fill")
-                                    .resizable()
-                                    .frame(width: 50, height: 50)
-                                    .foregroundColor(.gray)
-                            }
-                            
-                            Spacer()
-                            
-                            PhotosPicker(selection: $contactImageItem, matching: .images) {
-                                Text("Select Image")
-                            }
-                            .onChange(of: contactImageItem) { _, newValue in
-                                Task {
-                                    if let data = try? await newValue?.loadTransferable(type: Data.self) {
-                                        contactImageData = data
-                                    }
-                                }
-                            }
-                        }
+                        ContactImagePickerRow(
+                            contactImageItem: $contactImageItem,
+                            contactImageData: $contactImageData
+                        )
                         
                         TextField("Name", text: $renameText)
                             .textInputAutocapitalization(.words)
@@ -282,29 +214,153 @@ struct ChatView: View {
         .navigationSubtitle(searchTarget)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            Button() {
-                if let existing = contacts.first(where: { $0.webRTCId == searchTarget }) {
-                    renameText = existing.humanName
-                    contactImageData = existing.image
-                } else {
-                    renameText = ""
-                    contactImageData = nil
+            ToolbarItem(placement: .topBarTrailing) {
+                Button() {
+                    if let existing = contacts.first(where: { $0.webRTCId == searchTarget }) {
+                        renameText = existing.humanName
+                        contactImageData = existing.image
+                    } else {
+                        renameText = ""
+                        contactImageData = nil
+                    }
+                    showRename = true
+                } label: {
+                    Image(systemName: "info.circle")
                 }
-                showRename = true
-            } label: {
-                Image(systemName: "info.circle")
             }
             
             
             if !isViewingHistory {
-                Button {
-                    webRTC.disconnect()
-                    webRTC.connectedTo = ""
-                } label: {
-                    Image(systemName:"rectangle.portrait.and.arrow.forward")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        webRTC.disconnect()
+                        webRTC.connectedTo = ""
+                    } label: {
+                        Image(systemName:"rectangle.portrait.and.arrow.forward")
+                    }
                 }
             }
             
+        }
+    }
+}
+
+struct MessageRowView: View {
+    let msg: Message
+    let searchTarget: String
+    let contacts: [Contact]
+    @Binding var previewImage: UIImage?
+    @Binding var showPreviewImage: Bool
+
+    var contact: Contact? {
+        contacts.first(where: { $0.webRTCId == msg.from })
+    }
+
+    var isMe: Bool {
+        msg.from != searchTarget
+    }
+
+    var body: some View {
+        VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+            if !isMe {
+                HStack {
+                    Color.clear.frame(width: 30, height: 0)
+                    Text(contact?.humanName ?? "")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+
+            HStack(alignment: .center) {
+                if isMe {
+                    Spacer(minLength: 50)
+                } else {
+                    if let contact = contact,
+                       let imgData = contact.image,
+                       let uiImage = UIImage(data: imgData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 30, height: 30)
+                            .clipShape(Circle())
+                            .foregroundStyle(.gray)
+                    } else {
+                        Image(systemName: "person.circle.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 30, height: 30)
+                            .foregroundStyle(.gray)
+                    }
+                }
+
+                if msg.content.hasPrefix("B64__IMAGE:"),
+                   let base64String = msg.content.components(separatedBy: "B64__IMAGE:").last,
+                   let data = Data(base64Encoded: base64String),
+                   let uiImage = UIImage(data: data) {
+                    
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 200, maxHeight: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .onTapGesture {
+                            previewImage = uiImage
+                            showPreviewImage = true
+                        }
+                } else {
+                    Text(msg.content)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            isMe
+                            ? Color.accentColor
+                            : Color.gray.opacity(0.2)
+                        )
+                        .foregroundStyle(isMe ? .white : .primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                }
+
+                if !isMe {
+                    Spacer(minLength: 50)
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+}
+
+struct ContactImagePickerRow: View {
+    @Binding var contactImageItem: PhotosPickerItem?
+    @Binding var contactImageData: Data?
+    
+    var body: some View {
+        HStack {
+            if let data = contactImageData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 50, height: 50)
+                    .clipShape(Circle())
+            } else {
+                Image(systemName: "person.circle.fill")
+                    .resizable()
+                    .frame(width: 50, height: 50)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            PhotosPicker(selection: $contactImageItem, matching: .images) {
+                Text("Select Image")
+            }
+            .onChange(of: contactImageItem) { _, newValue in
+                Task {
+                    if let data = try? await newValue?.loadTransferable(type: Data.self) {
+                        contactImageData = data
+                    }
+                }
+            }
         }
     }
 }

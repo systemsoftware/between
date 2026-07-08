@@ -122,6 +122,9 @@ final class WebRTCManager: NSObject, ObservableObject {
     /// Configure (or reconfigure) the signaling server. Must be a ws:// or wss:// URL.
     /// Call this before `connect(toUserId:)`.
     func setSignalingServer(_ url: URL) {
+        if signalingURL != url {
+            closeSignalingSocket()
+        }
         signalingURL = url
     }
 
@@ -130,6 +133,7 @@ final class WebRTCManager: NSObject, ObservableObject {
         guard let signalingURL = signalingURL else { return }
         if webSocketTask == nil {
             let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+            guard signalingURL.scheme == "ws" || signalingURL.scheme == "wss" else { return }
             urlSession = session
             let task = session.webSocketTask(with: signalingURL)
             webSocketTask = task

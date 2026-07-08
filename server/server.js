@@ -14,6 +14,15 @@ server.on('request', (req, res) => {
 });
 
 wss.on('connection', (ws) => {
+
+    ws.isAlive = true;
+
+  ws.on('pong', () => {
+
+    ws.isAlive = true;
+
+  });
+
   console.log('New client connected.');
 
   ws.on('message', (message) => {
@@ -56,4 +65,20 @@ wss.on('connection', (ws) => {
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`Signaling server listening on :${port}`);
+});
+
+const interval = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) {
+      console.log("Terminating dead client");
+      return ws.terminate();
+    }
+
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+
+wss.on('close', () => {
+  clearInterval(interval);
 });

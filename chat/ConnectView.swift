@@ -1,6 +1,7 @@
 import SwiftUI
 import CryptoKit
 import SwiftData
+import UIKit
 
 struct ConnectView: View {
     
@@ -21,6 +22,11 @@ struct ConnectView: View {
     
     @Environment(\.modelContext) var modelContext
     @Query var messages: [Message]
+    
+    @Query var contacts: [Contact]
+    
+    @State var showError = false
+    @State var errorText = ""
     
     var body: some View {
         
@@ -53,34 +59,71 @@ struct ConnectView: View {
             // Connection
             VStack(spacing: 16) {
 
-                Text("Connect")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 
                 VStack {
-                    Label("Signal Server", image:"server.rack")
-                        .font(.caption)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    TextField("Signal Server", text: $signalServer)
-                        .textFieldStyle(.roundedBorder)
+                        Label("Signaling Server", systemImage:"server.rack")
+                            .font(.caption)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack {
+                        TextField("URL", text: $signalServer)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button {
+                            if let url = URL(string:signalServer) {
+                                webRTC.setSignalingServer(url)
+                                Task {
+                                    let reachable = await ping(url)
+                                    
+                                    if reachable {
+                                        webRTC.register()
+                                        errorText = "Connected"
+                                        showError = true
+                                    } else {
+                                        errorText = "Signaling server not reachable"
+                                        showError = true
+                                    }
+                                }
+                            } else {
+                                errorText = "Invalid URL"
+                                showError = true
+                            }
+                        } label: {
+                            Image(systemName: "arrow.right.to.line.compact")
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
 
                 VStack{
-                    Label("User ID", image:"person")
+                    Label("User ID", systemImage:"person")
                         .font(.caption)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     TextField("User ID", text: $connectTo)
                         .textFieldStyle(.roundedBorder)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                 }
 
                 Button {
                     if let url = URL(string:signalServer) {
-                        webRTC.setSignalingServer(url)
-                        webRTC.register()
-                        webRTC.connectedTo = connectTo
-                        webRTC.connect(toUserId: connectTo)
+                        Task {
+                            webRTC.setSignalingServer(url)
+                            
+                            let reachable = await ping(url)
+                            
+                            if reachable {
+                                webRTC.register()
+                                webRTC.connectedTo = connectTo
+                                webRTC.connect(toUserId: connectTo)
+                            } else {
+                                errorText = "Signaling server not reachable"
+                                showError = true
+                            }
+                        }
                     } else {
-                        print("Invalid URL")
+                        errorText = "Invalid URL"
+                        showError = true
                     }
                 } label: {
                     Label("Connect", systemImage: "arrow.right.circle.fill")
@@ -97,13 +140,17 @@ struct ConnectView: View {
         }
         .padding()
         .animation(.smooth, value: connectTo)
-        .onChange(of: signalServer) { _, s in
-            if let url = URL(string:s) {
-                webRTC.setSignalingServer(url)
-            }
+        .alert("Alert",isPresented: $showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorText)
         }
         .onAppear {
-            guard let url = URL(string:signalServer) else { print("Invalid URl"); return }
+            guard let url = URL(string:signalServer) else {
+                errorText = "Invalid URL"
+                showError = true
+                return
+            }
             webRTC.setSignalingServer(url)
             let key = loadP256KeyAgreementPrivateKey(account:Config.appGroupIdentifier)
             if let publicKey = key?.publicKey {
@@ -123,17 +170,21 @@ struct ConnectView: View {
         .navigationTitle("Between")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            
-            Button {
-                showReset = true
-            } label: {
-                Image(systemName: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
+            ToolbarItem(placement: .topBarLeading) {
+                Button() {
+                    showHistory = true
+                } label: {
+                    Image(systemName: "clock")
+                }
             }
             
-            Button() {
-                showHistory = true
-            } label: {
-                Image(systemName: "clock")
+            
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showReset = true
+                } label: {
+                    Image(systemName: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
+                }
             }
         }
         .alert("Incoming Connection", isPresented: $showConnectionAlert) {
@@ -159,7 +210,8 @@ struct ConnectView: View {
                         try modelContext.delete(model: Message.self)
                         try modelContext.save()
                     } catch {
-                        print(error)
+                        errorText = error.localizedDescription
+                        showError = true
                     }
                     
                     let key = loadP256KeyAgreementPrivateKey(account:Config.appGroupIdentifier)
@@ -191,7 +243,10 @@ struct ConnectView: View {
                     
                     List(uniqueConversations) { msg in
                         let peer = msg.from == webRTC.localClientId ? msg.to : msg.from
-                        NavigationLink(peer, value: msg)
+                        let contact = contacts.first(where: { $0.webRTCId == peer })
+                        NavigationLink(value: msg) {
+                            HistoryRowView(peer: peer, contact: contact)
+                        }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
                                     deleteMessages(from: peer)
@@ -222,6 +277,27 @@ struct ConnectView: View {
         }
         try? modelContext.delete(model: Message.self, where: predicate)
         try? modelContext.save()
+    }
+}
+
+struct HistoryRowView: View {
+    let peer: String
+    let contact: Contact?
+    
+    var body: some View {
+        HStack {
+            if let contact = contact,
+               let imgData = contact.image,
+               let uiImage = UIImage(data: imgData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 30, height: 30)
+                    .clipShape(Circle())
+                    .foregroundStyle(.gray)
+            }
+            Text(contact?.humanName ?? peer)
+        }
     }
 }
 
