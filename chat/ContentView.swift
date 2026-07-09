@@ -35,9 +35,20 @@ struct ContentView: View {
                 DispatchQueue.main.async {
                     if event.type == .send {
                         if let decrypted = decryptP2PMessage(event.payload, peerPublicKeyBase64: webRTC.connectedTo) {
-                            let msg = Message(content: decrypted, from: webRTC.connectedTo, to: webRTC.localClientId)
+                            let replyingTo: UUID? = event.replyingTo.flatMap { UUID(uuidString: $0) }
+                            let msg = Message(content: decrypted, from: webRTC.connectedTo, to: webRTC.localClientId, event:event.id, replyingTo:replyingTo)
                             modelContext.insert(msg)
                             try? modelContext.save()
+                        }
+                    } else if event.type == .delete {
+                        let targetID = UUID(uuidString:event.payload)
+                        do {
+                            try modelContext.delete(model: Message.self, where: #Predicate { object in
+                                object.event == targetID
+                            })
+                            try modelContext.save()
+                        } catch {
+                            print("Failed to delete: \(error)")
                         }
                     }
                 }

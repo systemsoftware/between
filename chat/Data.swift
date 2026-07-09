@@ -31,6 +31,7 @@ struct Event: Codable, Identifiable {
     var id = UUID()
     var type: EventTypes
     var payload: String
+    var replyingTo: String?
 }
 
 @Model
@@ -40,12 +41,16 @@ final class Message {
     var from: String
     var to: String
     var timestamp: Date
+    var event: UUID?
+    var replyingTo: UUID?
       
-    init(id: UUID = UUID(), content: String, from: String, to: String) {
+    init(id: UUID = UUID(), content: String, from: String, to: String, event:UUID, replyingTo:UUID?) {
           self.id = id
           self.content = content
           self.from = from
           self.to = to
+        self.event = event
+        self.replyingTo = replyingTo
         self.timestamp = Date()
       }
 }

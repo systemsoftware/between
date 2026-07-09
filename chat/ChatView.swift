@@ -30,6 +30,9 @@ struct ChatView: View {
     
     var isViewingHistory = false
     
+    
+    @State var replyingTo: UUID? = nil
+    
     init(webRTC: WebRTCManager, searchTarget: String, searchTarget2:String, isViewingHistory:Bool = false) {
         self.webRTC = webRTC
         self.searchTarget = searchTarget
@@ -59,7 +62,10 @@ struct ChatView: View {
                         searchTarget: searchTarget,
                         contacts: contacts,
                         previewImage: $previewImage,
-                        showPreviewImage: $showPreviewImage
+                        showPreviewImage: $showPreviewImage,
+                        replyingTo: $replyingTo,
+                        webRTC:webRTC,
+                        replyingToText:messages.first(where: { $0.event == msg.replyingTo })?.content ?? ""
                     )
                 }
             }
@@ -67,34 +73,67 @@ struct ChatView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if !isViewingHistory {
-                HStack {
-                    PhotosPicker(selection: $selectedItem, matching: .images) {
-                        Image(systemName: "photo")
+                VStack {
+                    
+                    if let replyID = replyingTo {
+                        HStack {
+                            if let msg = messages.first(where: { $0.event == replyID }) {
+                                Text("Replying to: \(msg.content.hasPrefix("B64__IMAGE:") ? "Image" : msg.content)")
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            } else {
+                                Text("Replying to message")
+                            }
+                            Spacer()
+                            Button {
+                                replyingTo = nil
+                            } label: {
+                                Image(systemName:"xmark")
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.gray)
+                            
                     }
                     
-                    TextField("Message", text:$text)
-                    Button() {
-                        
-                        let msg = Message(content: text, from: pubKey, to: searchTarget)
-                        modelContext.insert(msg)
-                        
-                        if let enc = encryptP2PMessage(text, peerPublicKeyBase64: searchTarget) {
-                            webRTC.send(Event(
-                                type: .send, payload: enc
-                            ))
-                            
-                            text = ""
-                        } else {
-                            print("Could not encrypt message")
+                    HStack {
+                        PhotosPicker(selection: $selectedItem, matching: .images) {
+                            Image(systemName: "photo")
                         }
-                    } label:{
-                        Image(systemName: "paperplane.fill")
+                        
+                        TextField("Message", text:$text)
+                        Button() {
+                            
+                            
+                            if let enc = encryptP2PMessage(text, peerPublicKeyBase64: searchTarget) {
+                                
+                                
+                                let event = Event(
+                                    type: .send, payload: enc,
+                                    replyingTo: replyingTo?.uuidString
+                                )
+                                
+                                let msg = Message(content: text, from: pubKey, to: searchTarget, event:event.id, replyingTo:replyingTo)
+                                modelContext.insert(msg)
+                                
+                                webRTC.send(event)
+                                
+                                text = ""
+                                
+                                replyingTo = nil
+                                
+                            } else {
+                                print("Could not encrypt message")
+                            }
+                        } label:{
+                            Image(systemName: "paperplane.fill")
+                        }
+                        .disabled(text.isEmpty)
+                        .keyboardShortcut(.defaultAction)
                     }
-                    .disabled(text.isEmpty)
-                    .keyboardShortcut(.defaultAction)
+                    .padding()
+                    .glassEffect(in: .rect(cornerRadius: 16.0))
                 }
-                .padding()
-                .glassEffect(in: .rect(cornerRadius: 16.0))
             }
         }
         .padding(.horizontal)
@@ -193,11 +232,13 @@ struct ChatView: View {
                         let base64 = jpegData.base64EncodedString()
                         let imagePayload = "B64__IMAGE:" + base64
                         
-                        let msg = Message(content: imagePayload, from: pubKey, to: searchTarget)
-                        modelContext.insert(msg)
+                      
                         
                         if let enc = encryptP2PMessage(imagePayload, peerPublicKeyBase64: searchTarget) {
-                            webRTC.send(Event(type: .send, payload: enc))
+                            let event = Event(type: .send, payload: enc)
+                            let msg = Message(content: imagePayload, from: pubKey, to: searchTarget, event:event.id, replyingTo:replyingTo)
+                            modelContext.insert(msg)
+                            webRTC.send(event)
                         } else {
                             print("Could not encrypt image message")
                         }
@@ -251,6 +292,12 @@ struct MessageRowView: View {
     let contacts: [Contact]
     @Binding var previewImage: UIImage?
     @Binding var showPreviewImage: Bool
+    
+    @Binding var replyingTo: UUID?
+    
+    @Environment(\.modelContext) var modelContext
+    
+    var webRTC: WebRTCManager
 
     var contact: Contact? {
         contacts.first(where: { $0.webRTCId == msg.from })
@@ -260,16 +307,25 @@ struct MessageRowView: View {
         msg.from != searchTarget
     }
 
+    var replyingToText: String = ""
+    
     var body: some View {
         VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
-            if !isMe {
                 HStack {
-                    Color.clear.frame(width: 30, height: 0)
-                    Text(contact?.humanName ?? "")
+                    if !isMe {
+                    Text(
+                        contact?.humanName ?? ""
+                    )
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Spacer()
                 }
+                    
+                    if !replyingToText.isEmpty {
+                       Label(replyingToText, systemImage: "arrowshape.turn.up.left.fill")
+                            .font(.caption)
+                            .foregroundStyle(.gray)
+                    }
+                    Spacer()
             }
 
             HStack(alignment: .center) {
@@ -327,8 +383,48 @@ struct MessageRowView: View {
             }
         }
         .padding(.horizontal)
+        .contextMenu {
+         
+            if webRTC.isPeerConnected {
+                Button("Reply") {
+                    replyingTo = msg.event
+                }
+                
+                Divider()
+            }
+            
+            if msg.from == webRTC.localClientId {
+                if webRTC.isPeerConnected {
+                    Button("Unsend") {
+                        let event = Event(
+                            type:.delete,
+                            payload: msg.event?.uuidString ?? ""
+                        )
+                        
+                        webRTC.send(event)
+                        
+                        do {
+                            modelContext.delete(msg)
+                            try modelContext.save()
+                        } catch {
+                            print("Failed to delete: \(error)")
+                        }
+                    }
+                }
+            }
+            Button("Delete for You") {
+                do {
+                    modelContext.delete(msg)
+                    try modelContext.save()
+                } catch {
+                    print("Failed to delete: \(error)")
+                }
+            }
+            
+        }
     }
 }
+
 
 struct ContactImagePickerRow: View {
     @Binding var contactImageItem: PhotosPickerItem?

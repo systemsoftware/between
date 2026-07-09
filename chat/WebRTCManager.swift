@@ -110,6 +110,7 @@ final class WebRTCManager: NSObject, ObservableObject {
     private var targetClientId: String?
     private var pendingRemoteCandidates: [RTCIceCandidate] = []
     private var pendingEvents: [Event] = []
+    private var pingTimer: Timer?
 
     // MARK: Init
 
@@ -139,6 +140,7 @@ final class WebRTCManager: NSObject, ObservableObject {
             let task = session.webSocketTask(with: signalingURL)
             webSocketTask = task
             task.resume()
+            startPingTimer()
             listenForSignalingMessages()
         }
         sendSignaling(SignalingMessage(type: "register", from: localClientId, to: nil, sdp: nil, sdpMLineIndex: nil, sdpMid: nil))
@@ -324,10 +326,23 @@ final class WebRTCManager: NSObject, ObservableObject {
     }
 
     private func closeSignalingSocket() {
+        pingTimer?.invalidate()
+        pingTimer = nil
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
         urlSession?.invalidateAndCancel()
         urlSession = nil
+    }
+
+    private func startPingTimer() {
+        pingTimer?.invalidate()
+        pingTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.webSocketTask?.sendPing { error in
+                if let error = error {
+                    debugPrint("WebRTCManager: ping error \(error)")
+                }
+            }
+        }
     }
 
     /// Called the moment we detect a live P2P path - drops the signaling server.
@@ -358,10 +373,13 @@ extension WebRTCManager: RTCPeerConnectionDelegate {
         switch newState {
         case .connected, .completed:
             handlePeerBecameReachable()
-        case .disconnected, .failed, .closed:
+        case .failed, .closed:
             DispatchQueue.main.async {
                 self.isPeerConnected = false
             }
+        case .disconnected:
+            // ICE disconnected can be temporary (e.g. network switch). Don't immediately boot the user out.
+            break
         default:
             break
         }
