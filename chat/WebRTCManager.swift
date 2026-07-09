@@ -85,6 +85,7 @@ final class WebRTCManager: NSObject, ObservableObject {
 
     var localClientId: String
     @Published private(set) var isPeerConnected = false
+    @Published private(set) var isReadyToSend = false
 
     // MARK: Private - WebRTC
 
@@ -180,6 +181,7 @@ final class WebRTCManager: NSObject, ObservableObject {
         closeSignalingSocket()
         DispatchQueue.main.async {
             self.isPeerConnected = false
+            self.isReadyToSend = false
         }
         targetClientId = nil
         pendingRemoteCandidates.removeAll()
@@ -367,6 +369,15 @@ extension WebRTCManager: RTCPeerConnectionDelegate {
 
     func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {}
 
+    private func updateReadyState() {
+        DispatchQueue.main.async {
+            let iceState = self.peerConnection?.iceConnectionState
+            let isIceConnected = iceState == .connected || iceState == .completed
+            let isDataOpen = self.dataChannel?.readyState == .open
+            self.isReadyToSend = isIceConnected && isDataOpen
+        }
+    }
+
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
         delegate?.webRTCManager(self, didChangeConnectionState: newState)
 
@@ -383,6 +394,8 @@ extension WebRTCManager: RTCPeerConnectionDelegate {
         default:
             break
         }
+        
+        updateReadyState()
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {}
@@ -413,6 +426,8 @@ extension WebRTCManager: RTCPeerConnectionDelegate {
 
 extension WebRTCManager: RTCDataChannelDelegate {
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        updateReadyState()
+        
         if dataChannel.readyState == .open {
             handlePeerBecameReachable()
             

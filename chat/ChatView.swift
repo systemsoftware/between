@@ -93,46 +93,48 @@ struct ChatView: View {
                         }
                         .font(.caption)
                         .foregroundStyle(.gray)
-                            
+                        
                     }
                     
-                    HStack {
-                        PhotosPicker(selection: $selectedItem, matching: .images) {
-                            Image(systemName: "photo")
-                        }
-                        
-                        TextField("Message", text:$text)
-                        Button() {
-                            
-                            
-                            if let enc = encryptP2PMessage(text, peerPublicKeyBase64: searchTarget) {
-                                
-                                
-                                let event = Event(
-                                    type: .send, payload: enc,
-                                    replyingTo: replyingTo?.uuidString
-                                )
-                                
-                                let msg = Message(content: text, from: pubKey, to: searchTarget, event:event.id, replyingTo:replyingTo)
-                                modelContext.insert(msg)
-                                
-                                webRTC.send(event)
-                                
-                                text = ""
-                                
-                                replyingTo = nil
-                                
-                            } else {
-                                print("Could not encrypt message")
+                    if webRTC.isReadyToSend {
+                        HStack {
+                            PhotosPicker(selection: $selectedItem, matching: .images) {
+                                Image(systemName: "photo")
                             }
-                        } label:{
-                            Image(systemName: "paperplane.fill")
+                            
+                            TextField("Message", text:$text)
+                            Button() {
+                                
+                                
+                                if let enc = encryptP2PMessage(text, peerPublicKeyBase64: searchTarget) {
+                                    
+                                    
+                                    let event = Event(
+                                        type: .send, payload: enc,
+                                        replyingTo: replyingTo?.uuidString
+                                    )
+                                    
+                                    let msg = Message(content: text, from: pubKey, to: searchTarget, event:event.id, replyingTo:replyingTo)
+                                    modelContext.insert(msg)
+                                    
+                                    webRTC.send(event)
+                                    
+                                    text = ""
+                                    
+                                    replyingTo = nil
+                                    
+                                } else {
+                                    print("Could not encrypt message")
+                                }
+                            } label:{
+                                Image(systemName: "paperplane.fill")
+                            }
+                            .disabled(text.isEmpty)
+                            .keyboardShortcut(.defaultAction)
                         }
-                        .disabled(text.isEmpty)
-                        .keyboardShortcut(.defaultAction)
+                        .padding()
+                        .glassEffect(in: .rect(cornerRadius: 16.0))
                     }
-                    .padding()
-                    .glassEffect(in: .rect(cornerRadius: 16.0))
                 }
             }
         }
@@ -318,14 +320,16 @@ struct MessageRowView: View {
                     )
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                }
+                    } else {
+                        Spacer()
+                    }
+                    
                     
                     if !replyingToText.isEmpty {
                        Label(replyingToText, systemImage: "arrowshape.turn.up.left.fill")
                             .font(.caption)
                             .foregroundStyle(.gray)
                     }
-                    Spacer()
             }
 
             HStack(alignment: .center) {
