@@ -7,28 +7,46 @@ struct ContentView: View {
     @StateObject var webRTC = WebRTCManager()
     @Environment(\.modelContext) var modelContext
     
+    @Query var messages: [Message]
+    
+    @Query var contacts: [Contact]
+    
     @State var showWipeAlert = false
     
     var body: some View {
-        NavigationStack {
-            if !webRTC.isPeerConnected {
-                ConnectView(webRTC: webRTC)
-                    .padding()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onTapGesture(count: 3) {
-                        showWipeAlert = true
-                    }
-            } else {
-                ChatView(webRTC: webRTC, searchTarget: webRTC.connectedTo, searchTarget2: webRTC.localClientId)
-                    .padding()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onTapGesture(count: 3) {
-                        showWipeAlert = true
-                    }
-                    .alert("What do you want to wipe?", isPresented: $showWipeAlert) {
-                        wipeAlert()
-                    }
+        TabView {
+            NavigationStack {
+                if !webRTC.isPeerConnected {
+                    ConnectView(webRTC: webRTC)
+                        .padding()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .onTapGesture(count: 3) {
+                            showWipeAlert = true
+                        }
+                } else {
+                    ChatView(webRTC: webRTC, searchTarget: webRTC.connectedTo, searchTarget2: webRTC.localClientId)
+                        .padding()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .onTapGesture(count: 3) {
+                            showWipeAlert = true
+                        }
+                        .alert("What do you want to wipe?", isPresented: $showWipeAlert) {
+                            wipeAlert()
+                        }
+                }
+            }.tabItem {
+                Label("Chat", systemImage: "bubble")
             }
+            
+            ContactsView()
+                .tabItem {
+                    Label("Contacts", systemImage: "person.crop.circle")
+                }
+            
+            HistoryView(webRTC: webRTC)
+                .tabItem {
+                    Label("History", systemImage: "clock")
+                }
         }
         .onAppear {
             webRTC.onMessage = { event in

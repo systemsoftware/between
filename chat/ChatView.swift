@@ -17,21 +17,17 @@ struct ChatView: View {
     @Query var messages: [Message]
     @Query var contacts: [Contact]
     
-    @State var showRename = false
-    @State var renameText: String = ""
-    @State private var contactImageItem: PhotosPickerItem?
-    @State private var contactImageData: Data?
-    
     @State private var previewImage: UIImage?
     @State private var showPreviewImage: Bool = false
     
-    let searchTarget: String
+    @State var searchTarget: String
     let searchTarget2: String
     
     var isViewingHistory = false
     
-    
     @State var replyingTo: UUID? = nil
+    
+    @State var showRename = false
     
     init(webRTC: WebRTCManager, searchTarget: String, searchTarget2:String, isViewingHistory:Bool = false) {
         self.webRTC = webRTC
@@ -152,63 +148,7 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showRename) {
-            NavigationStack {
-                Form {
-                    Section("Info") {
-                        ContactImagePickerRow(
-                            contactImageItem: $contactImageItem,
-                            contactImageData: $contactImageData
-                        )
-                        
-                        TextField("Name", text: $renameText)
-                            .textInputAutocapitalization(.words)
-                    }
-                    
-                    Section("ID") {
-                        Text(searchTarget)
-                        Button {
-                            UIPasteboard.general.string = searchTarget
-                        } label: {
-                            Text("Copy ID")
-                        }
-                    }
-                }
-                .navigationTitle("Contact")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") {
-                            renameText = ""
-                            contactImageData = nil
-                            contactImageItem = nil
-                            showRename = false
-                        }
-                    }
-
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") {
-                            if let existing = contacts.first(where: { $0.webRTCId == searchTarget }) {
-                                existing.humanName = renameText
-                                existing.image = contactImageData
-                            } else {
-                                let contact = Contact(
-                                    webRTCid: searchTarget,
-                                    humanName: renameText,
-                                    image: contactImageData
-                                )
-                                modelContext.insert(contact)
-                            }
-                            try? modelContext.save()
-
-                            renameText = ""
-                            contactImageData = nil
-                            contactImageItem = nil
-                            showRename = false
-                        }
-                        .disabled(renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                }
-            }
+            ContactEditView(contacts: contacts, searchTarget:$searchTarget)
         }
         .onAppear {
             let key = loadP256KeyAgreementPrivateKey(account:Config.appGroupIdentifier)
@@ -259,13 +199,6 @@ struct ChatView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button() {
-                    if let existing = contacts.first(where: { $0.webRTCId == searchTarget }) {
-                        renameText = existing.humanName
-                        contactImageData = existing.image
-                    } else {
-                        renameText = ""
-                        contactImageData = nil
-                    }
                     showRename = true
                 } label: {
                     Image(systemName: "info.circle")
@@ -326,7 +259,7 @@ struct MessageRowView: View {
                     
                     
                     if !replyingToText.isEmpty {
-                       Label(replyingToText, systemImage: "arrowshape.turn.up.left.fill")
+                        Label(replyingToText.hasPrefix("B64__IMAGE:") ? "Image" : replyingToText, systemImage: "arrowshape.turn.up.left.fill")
                             .font(.caption)
                             .foregroundStyle(.gray)
                     }
@@ -435,32 +368,33 @@ struct ContactImagePickerRow: View {
     @Binding var contactImageData: Data?
     
     var body: some View {
-        HStack {
-            if let data = contactImageData, let uiImage = UIImage(data: data) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-            } else {
-                Image(systemName: "person.circle.fill")
-                    .resizable()
-                    .frame(width: 50, height: 50)
-                    .foregroundColor(.gray)
-            }
-            
-            Spacer()
-            
-            PhotosPicker(selection: $contactImageItem, matching: .images) {
-                Text("Select Image")
-            }
-            .onChange(of: contactImageItem) { _, newValue in
-                Task {
-                    if let data = try? await newValue?.loadTransferable(type: Data.self) {
-                        contactImageData = data
+            HStack {
+                if let data = contactImageData, let uiImage = UIImage(data: data) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 50, height: 50)
+                        .clipShape(Circle())
+                } else {
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .frame(width: 50, height: 50)
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                PhotosPicker(selection: $contactImageItem, matching: .images) {
+                    Text("Select Image")
+                }
+                .onChange(of: contactImageItem) { _, newValue in
+                    guard newValue != nil else { return }
+                    Task {
+                        if let data = try? await newValue?.loadTransferable(type: Data.self) {
+                            contactImageData = data
+                        }
                     }
                 }
             }
-        }
     }
 }

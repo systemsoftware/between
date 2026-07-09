@@ -6,6 +6,8 @@ import UIKit
 struct ConnectView: View {
     
     @ObservedObject var webRTC: WebRTCManager
+    
+    @Environment(\.modelContext) var modelContext
         
     @State private var pubKey: String = ""
     
@@ -13,13 +15,7 @@ struct ConnectView: View {
     
     @AppStorage("signalServer", store:Config.sharedDefaults) var signalServer = DEFAULT_SIGNAL_SERVER
     
-    @State var showHistory = false
     @State var showReset = false
-    
-    @Environment(\.modelContext) var modelContext
-    @Query var messages: [Message]
-    
-    @Query var contacts: [Contact]
     
     @State var showError = false
     @State var errorText = ""
@@ -27,15 +23,30 @@ struct ConnectView: View {
     @State var status = ""
     
     @State var connected = false
+    
+    @Query var contacts: [Contact]
+    
+    private var incomingConnectionName: String {
+        contacts.first(where: { $0.webRTCId == webRTC.incomingConnectionPeerId })?.humanName
+            ?? webRTC.incomingConnectionPeerId
+            ?? "Someone"
+    }
         
     var body: some View {
-                
+            
         VStack(spacing: 24) {
             // Public Key
             VStack(alignment: .leading, spacing: 8) {
-                Text("Your ID")
+                HStack {
+                    Text("Your ID")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Reset") {
+                        showReset = true
+                    }
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                }
 
                 HStack {
                     Text(pubKey)
@@ -139,30 +150,32 @@ struct ConnectView: View {
                 .buttonStyle(.glassProminent)
 
                 
-                if !status.isEmpty {
-                    HStack {
-                        if !connected && !showError {
-                            ProgressView()
-                        } else if showError {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.red)
-                        } else {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        }
-                        Text(status)
-                            .frame(alignment: .center)
-                        Spacer()
-                    }
-                }
-                
             }
             .padding(20)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28))
-
+            Spacer()
         }
         .padding()
         .animation(.smooth, value: connectTo)
+        .safeAreaInset(edge: .bottom) {
+            if !status.isEmpty {
+                HStack {
+                    if !connected && !showError {
+                        ProgressView()
+                    } else if showError {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    Text(status)
+                }
+                .padding()
+                .glassEffect(.regular.interactive())
+                .frame(maxWidth:.infinity)
+            }
+        }
         .onAppear {
             Task {
                 guard let url = URL(string:signalServer) else {
@@ -196,24 +209,6 @@ struct ConnectView: View {
         }
         .navigationTitle("Between")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button() {
-                    showHistory = true
-                } label: {
-                    Image(systemName: "clock")
-                }
-            }
-            
-            
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showReset = true
-                } label: {
-                    Image(systemName: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
-                }
-            }
-        }
         .alert("Incoming Connection", isPresented: $webRTC.showConnectionAlert) {
             Button("Accept") {
                 webRTC.connectionDecisionCallback?(true)
@@ -227,7 +222,7 @@ struct ConnectView: View {
                 webRTC.incomingConnectionPeerId = nil
             }
         } message: {
-            Text("\(webRTC.incomingConnectionPeerId ?? "Someone") is requesting to connect.")
+            Text("\(incomingConnectionName) is requesting to connect.")
         }
         .alert("New ID", isPresented: $showReset) {
             Button("Yes") {
@@ -255,61 +250,25 @@ struct ConnectView: View {
         } message: {
             Text("Are you sure you want to get a new ID? This will delete all conversations and make you no longer reachable at your current ID.")
         }
-        .sheet(isPresented: $showHistory) {
-            NavigationStack {
-                let uniqueConversations = messages
-                    .sorted { $0.timestamp > $1.timestamp }
-                    .reduce(into: [Message]()) { result, msg in
-                        let peer = msg.from == webRTC.localClientId ? msg.to : msg.from
-                        if !result.contains(where: { ($0.from == webRTC.localClientId ? $0.to : $0.from) == peer }) {
-                            result.append(msg)
-                        }
-                    }
-                
-                if uniqueConversations.count > 0 {
-                    
-                    List(uniqueConversations) { msg in
-                        let peer = msg.from == webRTC.localClientId ? msg.to : msg.from
-                        let contact = contacts.first(where: { $0.webRTCId == peer })
-                        NavigationLink(value: msg) {
-                            HistoryRowView(peer: peer, contact: contact)
-                        }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    deleteMessages(from: peer)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                    }
-                    .navigationDestination(for: Message.self) { msg in
-                        let peer = msg.from == webRTC.localClientId ? msg.to : msg.from
-                        ChatView(webRTC: webRTC, searchTarget: peer, searchTarget2: webRTC.localClientId, isViewingHistory: true)
-                    }
-                    .navigationTitle("Chat History")
-                } else {
-                    ContentUnavailableView {
-                        Label("No chat history", systemImage: "clock.badge.xmar")
-                    } description: {
-                        Text("New chats you create will appear here.")
-                    }
-                }
-            }
-        }
     }
-    
-    private func deleteMessages(from peer: String) {
-        let predicate = #Predicate<Message> { msg in
-            msg.from == peer || msg.to == peer
-        }
-        try? modelContext.delete(model: Message.self, where: predicate)
-        try? modelContext.save()
-    }
+
 }
 
 struct HistoryRowView: View {
     let peer: String
     let contact: Contact?
+    
+    var showId = false
+    
+    @State var showCopiedAlert = false
+    
+    
+      private var copyTap: (some Gesture)? {
+          showId ? TapGesture().onEnded {
+              UIPasteboard.general.string = peer
+              showCopiedAlert = true
+          } : nil
+      }
     
     var body: some View {
         HStack {
@@ -323,7 +282,25 @@ struct HistoryRowView: View {
                     .clipShape(Circle())
                     .foregroundStyle(.gray)
             }
-            Text(contact?.humanName ?? peer)
+           
+            VStack(alignment: .leading) {
+                Text(contact?.humanName ?? peer)
+                
+                if showId && contact?.humanName != nil {
+                    Text(peer)
+                        .font(.caption)
+                        .foregroundStyle(.gray)
+                }
+            }
+            
+        }
+        .gesture(copyTap)
+        .alert("Copied",isPresented: $showCopiedAlert) {
+            Button("Ok",role:.cancel) {
+                
+            }
+        } message: {
+            Text("Copied contact's ID to clipboard")
         }
     }
 }
