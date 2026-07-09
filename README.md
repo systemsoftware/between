@@ -8,8 +8,8 @@ This repository contains both the iOS client application and a lightweight Node.
 
 <p align="center">
   <img src="images/connect.png" alt="Connect Screen" width="30%">
-  <img src="images/chat.png" alt="Contact Screen" width="30%">
-  <img src="images/contact.png" alt="Chat Screen" width="30%">
+  <img src="images/chat.png" alt="chat Screen" width="30%">
+  <img src="images/menu.png" alt="Menu options" width="30%">
 </p>
 
 ## Features
@@ -76,6 +76,14 @@ Because WebRTC IDs are long, cryptographic public keys, the app includes a built
 - You can save a peer's ID as a **Contact** with a human-readable name and an optional profile picture.
 - Contacts are integrated into the chat history, so you see friendly names and avatars instead of raw IDs.
 - Like messages, all contact data is stored securely and locally on your device.
+
+<img src="images/contact.png" alt="Contacts Screen" width="30%">
+
+## History
+See all chat history, even when not connected to a client.
+
+<img src="images/history.png" alt="History Screen" width="30%">
+
 
 ## Data Management
 
