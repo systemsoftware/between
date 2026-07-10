@@ -68,7 +68,7 @@ The signaling server will start listening on `ws://0.0.0.0:3030`.
 1. **Registration:** When the app launches, it connects to the signaling server and registers its local client ID.
 2. **Handshake:** When connecting to a peer, the app generates a WebRTC offer and sends it through the signaling server to the target client. The target replies with an answer, and both exchange ICE candidates to discover the optimal network path.
 3. **P2P Connection:** Once the `RTCDataChannel` opens, the app disconnects from the signaling server. 
-4. **Messaging:** All subsequent messages (e.g., chat messages, typing indicators) are encrypted and sent directly over the P2P connection, bypassing any central server.
+4. **Messaging:** All subsequent messages are encrypted and sent directly over the P2P connection, bypassing any central server.
 
 ## Contact System
 

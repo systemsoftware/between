@@ -1,6 +1,8 @@
 import Foundation
+import _SwiftData_SwiftUI
 import WebRTC
 internal import Combine
+import SwiftData
 
 // MARK: - Delegate
 
@@ -269,6 +271,8 @@ final class WebRTCManager: NSObject, ObservableObject {
             }
         }
     }
+    
+    var modelContext: ModelContext?
 
     private func handleSignaling(_ message: SignalingMessage) {
         switch message.type {
@@ -286,7 +290,20 @@ final class WebRTCManager: NSObject, ObservableObject {
                         debugPrint("WebRTCManager: Connection from \(from) rejected by user.")
                     }
                 }
-                self.showConnectionAlert = true
+                
+                var isBlocked = false
+                if let context = self.modelContext {
+                    let descriptor = FetchDescriptor<BlockedUser>(predicate: #Predicate { $0.webRTCid == from })
+                    if let results = try? context.fetch(descriptor), !results.isEmpty {
+                        isBlocked = true
+                    }
+                }
+                
+                if isBlocked {
+                    print("ignoring from blocked user")
+                } else {
+                    self.showConnectionAlert = true
+                }
             }
 
         case "answer":

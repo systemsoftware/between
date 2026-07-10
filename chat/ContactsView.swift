@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import SwiftData
+import MessageUI
 
 
 struct ContactsView: View {
@@ -14,6 +15,8 @@ struct ContactsView: View {
     @State var showEdit = false
     
     @State var editing = ""
+    
+    @State var showBlocked = false
     
     private var filteredContacts: [Contact] {
 
@@ -51,7 +54,17 @@ struct ContactsView: View {
             .sheet(isPresented: $showEdit) {
                 ContactEditView(contacts: contacts, searchTarget:$editing)
             }
+            .sheet(isPresented:$showBlocked) {
+                BlockedView()
+            }
             .searchable(text: $searchQuery)
+            .toolbar {
+                Button() {
+                    showBlocked = true
+                } label: {
+                    Image(systemName: "hand.raised")
+                }
+            }
         }
     }
     
@@ -82,7 +95,16 @@ struct ContactEditView: View {
     
     var contacts: [Contact]
     
+    @Query var blockedUsers: [BlockedUser]
+    
+    var isBlocked: Bool {
+        blockedUsers.first(where: { $0.webRTCid == searchTarget }) != nil
+    }
+    
     @Binding var searchTarget: String
+    
+    @State private var showMail = false
+    @State private var mailResult: Result<MFMailComposeResult, Error>?
     
     var body: some View {
         NavigationStack {
@@ -111,6 +133,53 @@ struct ContactEditView: View {
                         Text("Copy ID")
                     }
                 }
+                
+                Section("Actions") {
+                    Button {
+                        if isBlocked {
+                            try? modelContext.delete(
+                                model: BlockedUser.self,
+                                where: #Predicate { user in
+                                    user.webRTCid == searchTarget
+                                }
+                            )
+                            try? modelContext.save()
+                        } else {
+                            let u = BlockedUser(
+                                webRTCid: searchTarget
+                            )
+                            modelContext.insert(u)
+                        }
+                    } label: {
+                        Label( isBlocked ? "Unblock" : "Block", systemImage: "hand.raised")
+                            .foregroundStyle(.red)
+                    }
+                    
+                    Button {
+                        if MFMailComposeViewController.canSendMail() {
+                            showMail = true
+                        } else {
+                            let email = "report@coolstone.dev"
+                            let subject = "Report User: \(searchTarget)"
+                            let body = "Please describe the abusive behavior here. Because messages are encrypted and peer-to-peer, we cannot read your chat history. We recommend you also Block this user."
+                            if let url = URL(string: "mailto:\(email)?subject=\(subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&body=\(body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                    } label: {
+                        Label("Report", systemImage: "exclamationmark.bubble")
+                            .foregroundStyle(.orange)
+                    }
+                }
+                
+            }
+            .sheet(isPresented: $showMail) {
+                MailView(
+                    result: $mailResult,
+                    toRecipients: ["report@coolstone.dev"],
+                    subject: "Report User: \(searchTarget)",
+                    messageBody: "Please describe the abusive behavior here. Because messages are encrypted and peer-to-peer, we cannot read your chat history. We recommend you also Block this user."
+                )
             }
             .navigationTitle("Contact")
             .navigationBarTitleDisplayMode(.inline)

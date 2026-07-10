@@ -3,8 +3,10 @@ const http = require('http');
 
 const server = http.createServer();
 
-const port = 3030;
+const port = process.argv[2] || 3030;
 const wss = new WebSocket.Server({ server });
+
+const LOG = process.argv.includes('--log');
 
 const clients = new Map();
 
@@ -23,7 +25,9 @@ wss.on('connection', (ws) => {
 
   });
 
-  console.log('New client connected.');
+  if (LOG) {
+    console.log('New client connected.');
+  }
 
   ws.on('message', (message) => {
     try {
@@ -39,10 +43,14 @@ wss.on('connection', (ws) => {
           const targetSocket = clients.get(msg.to);
           if (targetSocket.readyState === WebSocket.OPEN) {
             targetSocket.send(message.toString());
-            console.log(`Forwarded ${msg.type} from ${msg.from} to ${msg.to}`);
+            if (LOG) {
+              console.log(`Forwarded ${msg.type} from ${msg.from} to ${msg.to}`);
+            }
           }
         } else {
-          console.log(`Target client ${msg.to} not found for ${msg.type}.`);
+          if (LOG) {
+            console.log(`Target client ${msg.to} not found for ${msg.type}.`);
+          }
         }
       }
     } catch (e) {
@@ -51,11 +59,15 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log('Client disconnected.');
+    if (LOG) {
+      console.log('Client disconnected.');
+    }
     for (const [id, socket] of clients.entries()) {
       if (socket === ws) {
         clients.delete(id);
-        console.log(`Unregistered client: ${id}`);
+        if (LOG) {
+          console.log(`Unregistered client: ${id}`);
+        }
         break;
       }
     }

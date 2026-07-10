@@ -26,6 +26,8 @@ struct ConnectView: View {
     
     @Query var contacts: [Contact]
     
+    @Query var blockedUsers: [BlockedUser]
+    
     private var incomingConnectionName: String {
         contacts.first(where: { $0.webRTCId == webRTC.incomingConnectionPeerId })?.humanName
             ?? webRTC.incomingConnectionPeerId

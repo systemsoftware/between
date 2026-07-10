@@ -49,6 +49,7 @@ struct ContentView: View {
                 }
         }
         .onAppear {
+            webRTC.modelContext = modelContext
             webRTC.onMessage = { event in
                 DispatchQueue.main.async {
                     if event.type == .send {

@@ -8,6 +8,7 @@ struct chatApp: App {
         let schema = Schema([
             Message.self,
             Contact.self,
+            BlockedUser.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

@@ -71,3 +71,15 @@ final class Contact {
         self.timestamp = Date()
       }
 }
+
+@Model
+final class BlockedUser {
+    var id: UUID
+    var webRTCid: String
+    
+    init(webRTCid: String) {
+        self.id = UUID()
+        self.webRTCid = webRTCid
+    }
+    
+}
