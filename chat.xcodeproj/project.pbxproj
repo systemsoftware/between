@@ -24,16 +24,16 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A539DA722FFDAC0900A892FE /* chat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = chat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A539DA722FFDAC0900A892FE /* between.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = between.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A539DAED2FFDC7F700A892FE /* Exceptions for "chat" folder in "chat" target */ = {
+		A539DAED2FFDC7F700A892FE /* Exceptions for "chat" folder in "between" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = A539DA712FFDAC0900A892FE /* chat */;
+			target = A539DA712FFDAC0900A892FE /* between */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -41,7 +41,7 @@
 		A539DA742FFDAC0900A892FE /* chat */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A539DAED2FFDC7F700A892FE /* Exceptions for "chat" folder in "chat" target */,
+				A539DAED2FFDC7F700A892FE /* Exceptions for "chat" folder in "between" target */,
 			);
 			path = chat;
 			sourceTree = "<group>";
@@ -72,7 +72,7 @@
 		A539DA732FFDAC0900A892FE /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A539DA722FFDAC0900A892FE /* chat.app */,
+				A539DA722FFDAC0900A892FE /* between.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,12 +87,13 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A539DA712FFDAC0900A892FE /* chat */ = {
+		A539DA712FFDAC0900A892FE /* between */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A539DA7F2FFDAC0900A892FE /* Build configuration list for PBXNativeTarget "chat" */;
+			buildConfigurationList = A539DA7F2FFDAC0900A892FE /* Build configuration list for PBXNativeTarget "between" */;
 			buildPhases = (
 				A539DA6E2FFDAC0900A892FE /* Sources */,
 				A539DA6F2FFDAC0900A892FE /* Frameworks */,
+				A56AE0A23000ACAE00B245D4 /* Run Script */,
 				A539DA702FFDAC0900A892FE /* Resources */,
 				A539DA9E2FFDBD3300A892FE /* Embed Frameworks */,
 			);
@@ -103,12 +104,12 @@
 			fileSystemSynchronizedGroups = (
 				A539DA742FFDAC0900A892FE /* chat */,
 			);
-			name = chat;
+			name = between;
 			packageProductDependencies = (
 				A539DAF52FFDD77100A892FE /* WebRTC */,
 			);
 			productName = chat;
-			productReference = A539DA722FFDAC0900A892FE /* chat.app */;
+			productReference = A539DA722FFDAC0900A892FE /* between.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -143,7 +144,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A539DA712FFDAC0900A892FE /* chat */,
+				A539DA712FFDAC0900A892FE /* between */,
 			);
 		};
 /* End PBXProject section */
@@ -157,6 +158,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A56AE0A23000ACAE00B245D4 /* Run Script */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 8;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Run Script";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"${CONFIGURATION}\" = \"Release\" ]; then\n    FRAMEWORK_PATH=\"${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/WebRTC.framework\"\n    DSYM_OUTPUT_DIR=\"${DWARF_DSYM_FOLDER_PATH}\"\n    DSYM_PATH=\"${DSYM_OUTPUT_DIR}/WebRTC.framework.dSYM\"\n\n    if [ -d \"$FRAMEWORK_PATH\" ]; then\n        echo \"Extracting dSYM safely...\"\n        mkdir -p \"$DSYM_OUTPUT_DIR\"\n        dsymutil \"$FRAMEWORK_PATH/WebRTC\" -o \"$DSYM_PATH\"\n        \n        # Strip local symbols safely\n        strip -x \"$FRAMEWORK_PATH/WebRTC\"\n        \n        # Re-sign the WebRTC framework slice to fix the invalid code signature error\n        if [ -n \"${EXPANDED_CODE_SIGN_IDENTITY}\" ]; then\n            echo \"Re-signing WebRTC.framework...\"\n            codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" --preserve-metadata=identifier,entitlements,flags \"$FRAMEWORK_PATH\"\n        fi\n    else\n        echo \"Warning: WebRTC.framework not found at $FRAMEWORK_PATH\"\n    fi\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A539DA6E2FFDAC0900A892FE /* Sources */ = {
@@ -292,7 +314,9 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 8K8948D7UD;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -307,12 +331,13 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = chat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Between;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Need to connect to signaling server on local network";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Between uses the local network to discover and establish faster, direct peer-to-peer connections with nearby users.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -351,6 +376,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8K8948D7UD;
 				ENABLE_APP_SANDBOX = YES;
@@ -366,12 +392,13 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = chat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Between;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Need to connect to signaling server on local network";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Between uses the local network to discover and establish faster, direct peer-to-peer connections with nearby users.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -415,7 +442,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A539DA7F2FFDAC0900A892FE /* Build configuration list for PBXNativeTarget "chat" */ = {
+		A539DA7F2FFDAC0900A892FE /* Build configuration list for PBXNativeTarget "between" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A539DA802FFDAC0900A892FE /* Debug */,
