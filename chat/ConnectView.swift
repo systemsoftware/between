@@ -28,6 +28,12 @@ struct ConnectView: View {
     
     @Query var blockedUsers: [BlockedUser]
     
+    
+    @State var showHelp = false
+    
+    @Environment(\.openURL) private var openURL
+
+    
     private var incomingConnectionName: String {
         contacts.first(where: { $0.webRTCId == webRTC.incomingConnectionPeerId })?.humanName
             ?? webRTC.incomingConnectionPeerId
@@ -211,6 +217,30 @@ struct ConnectView: View {
         }
         .navigationTitle("Between")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            Button {
+                showHelp = true
+        } label: {
+                Image(systemName: "questionmark.circle")
+            }
+        }
+        .alert("Info", isPresented: $showHelp) {
+            Button("Source Code") {
+                let url = URL(string:"https://github.com/systemsoftware/between/")
+                openURL(url!)
+            }
+            Button("Privacy Policy") {
+                let url = URL(string:"https://github.com/systemsoftware/between/blob/main/PrivacyPolicy.md")
+                openURL(url!)
+            }
+            Button("EULA") {
+                let url = URL(string:"https://github.com/systemsoftware/between/blob/main/EULA.md")
+                openURL(url!)
+            }
+            Button("Close") {
+                showHelp = false
+            }
+        }
         .alert("Incoming Connection", isPresented: $webRTC.showConnectionAlert) {
             Button("Accept") {
                 webRTC.connectionDecisionCallback?(true)
