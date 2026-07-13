@@ -7,8 +7,6 @@ struct BlockedView: View {
     
     @Environment(\.modelContext) var modelContext
     
-    @State var searchQuery = ""
-    
     @Query var contacts: [BlockedUser]
     
     @State var showEdit = false
@@ -29,7 +27,6 @@ struct BlockedView: View {
                     }
             }
             .navigationTitle("Blocked")
-            .searchable(text: $searchQuery)
         }
     }
     
