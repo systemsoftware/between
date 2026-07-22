@@ -33,6 +33,9 @@ struct ConnectView: View {
     
     @Environment(\.openURL) private var openURL
 
+    @State private var copiedTrigger = false
+    @State private var didCopy = false
+
     
     private var incomingConnectionName: String {
         contacts.first(where: { $0.webRTCId == webRTC.incomingConnectionPeerId })?.humanName
@@ -64,14 +67,29 @@ struct ConnectView: View {
 
                     Spacer()
 
-                    Image(systemName: "doc.on.doc")
-                        .foregroundStyle(.secondary)
+                    if didCopy {
+                        Image(systemName: "checkmark.circle")
+                            .foregroundStyle(.green)
+                    } else {
+                        Image(systemName: "doc.on.doc")
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .padding()
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18))
                 .contentShape(Rectangle())
+                .sensoryFeedback(.success, trigger: copiedTrigger)
                 .onTapGesture {
+                    didCopy = true
+                    copiedTrigger.toggle()
                     UIPasteboard.general.string = pubKey
+                    
+                    Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        await MainActor.run {
+                            didCopy = false
+                        }
+                    }
                 }
             }
 
@@ -141,6 +159,8 @@ struct ConnectView: View {
                                     status = "Registering with signaling server"
                                     webRTC.register()
                                     status = "Connecting..."
+                                    showError = false
+                                    connected = false
                                     webRTC.connectedTo = connectTo
                                     webRTC.connect(toUserId: connectTo)
                                 } else {
@@ -182,6 +202,13 @@ struct ConnectView: View {
                 .padding()
                 .glassEffect(.regular.interactive())
                 .frame(maxWidth:.infinity)
+            }
+        }
+        .onChange(of: webRTC.connectionError) { _, newError in
+            if let error = newError {
+                status = error
+                showError = true
+                connected = false
             }
         }
         .onAppear {

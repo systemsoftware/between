@@ -46,11 +46,17 @@ wss.on('connection', (ws) => {
             if (LOG) {
               console.log(`Forwarded ${msg.type} from ${msg.from} to ${msg.to}`);
             }
+          } else {
+            ws.send(JSON.stringify({ type: 'not_found', from: msg.to, to: msg.from }));
+            if (LOG) {
+              console.log(`Target client ${msg.to} socket not open for ${msg.type}.`);
+            }
           }
         } else {
           if (LOG) {
             console.log(`Target client ${msg.to} not found for ${msg.type}.`);
           }
+          ws.send(JSON.stringify({ type: 'not_found', from: msg.to, to: msg.from }));
         }
       }
     } catch (e) {

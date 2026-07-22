@@ -336,8 +336,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = chat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Between;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES;
+				INFOPLIST_KEY_ITSEncryptionExportComplianceCode = "0671e69a-b5d6-4fc8-936b-67e09b2ffaad";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app requires camera access for WebRTC peer-to-peer connections.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Between uses the local network to discover and establish faster, direct peer-to-peer connections with nearby users.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires microphone access for WebRTC peer-to-peer connections.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -397,8 +401,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = chat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Between;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES;
+				INFOPLIST_KEY_ITSEncryptionExportComplianceCode = "0671e69a-b5d6-4fc8-936b-67e09b2ffaad";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app requires camera access for WebRTC peer-to-peer connections.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Between uses the local network to discover and establish faster, direct peer-to-peer connections with nearby users.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires microphone access for WebRTC peer-to-peer connections.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

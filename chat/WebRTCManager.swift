@@ -15,7 +15,7 @@ protocol WebRTCManagerDelegate: AnyObject {
 /// Wire format used only between this client and the signaling server.
 /// `type` is one of: "register", "offer", "answer", "candidate".
 /// This never travels over the P2P data channel - only app-level `Event`s do.
-private struct SignalingMessage: Codable {
+nonisolated struct SignalingMessage: Codable {
     let type: String
     let from: String?
     let to: String?
@@ -88,6 +88,9 @@ final class WebRTCManager: NSObject, ObservableObject {
     var localClientId: String
     @Published private(set) var isPeerConnected = false
     @Published private(set) var isReadyToSend = false
+    @Published private(set) var isConnecting = false
+    @Published var connectionError: String? = nil
+    private var connectionTimeoutWorkItem: DispatchWorkItem?
 
     // MARK: Private - WebRTC
 
@@ -151,6 +154,13 @@ final class WebRTCManager: NSObject, ObservableObject {
 
     /// Initiates a P2P connection to `userId`.
     func connect(toUserId userId: String) {
+        cancelConnectionTimeout()
+        
+        DispatchQueue.main.async {
+            self.isConnecting = true
+            self.connectionError = nil
+        }
+        
         targetClientId = userId
         setupPeerConnection()
         setupOutgoingDataChannel()
@@ -160,6 +170,37 @@ final class WebRTCManager: NSObject, ObservableObject {
         }
         
         createOffer(to: userId)
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            if !self.isPeerConnected {
+                debugPrint("WebRTCManager: Connection attempt timed out after 5 seconds.")
+                self.handleConnectionFailed(reason: "Connection attempt timed out")
+            }
+        }
+        connectionTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0, execute: workItem)
+    }
+
+    private func cancelConnectionTimeout() {
+        connectionTimeoutWorkItem?.cancel()
+        connectionTimeoutWorkItem = nil
+    }
+
+    private func handleConnectionFailed(reason: String) {
+        cancelConnectionTimeout()
+        DispatchQueue.main.async {
+            self.isConnecting = false
+            self.isPeerConnected = false
+            self.connectionError = reason
+        }
+        dataChannel?.close()
+        dataChannel = nil
+        peerConnection?.close()
+        peerConnection = nil
+        targetClientId = nil
+        pendingRemoteCandidates.removeAll()
+        pendingEvents.removeAll()
     }
 
     /// Sends an `Event` to the connected peer over the (already P2P) data channel.
@@ -176,14 +217,17 @@ final class WebRTCManager: NSObject, ObservableObject {
 
     /// Tears down the peer connection, data channel, and signaling socket (if still open).
     func disconnect() {
+        cancelConnectionTimeout()
         dataChannel?.close()
         dataChannel = nil
         peerConnection?.close()
         peerConnection = nil
         closeSignalingSocket()
         DispatchQueue.main.async {
+            self.isConnecting = false
             self.isPeerConnected = false
             self.isReadyToSend = false
+            self.connectionError = nil
         }
         targetClientId = nil
         pendingRemoteCandidates.removeAll()
@@ -288,6 +332,7 @@ final class WebRTCManager: NSObject, ObservableObject {
                         self.acceptOffer(from: from, sdp: sdp)
                     } else {
                         debugPrint("WebRTCManager: Connection from \(from) rejected by user.")
+                        self.sendSignaling(SignalingMessage(type: "reject", from: self.localClientId, to: from, sdp: nil, sdpMLineIndex: nil, sdpMid: nil))
                     }
                 }
                 
@@ -301,9 +346,20 @@ final class WebRTCManager: NSObject, ObservableObject {
                 
                 if isBlocked {
                     print("ignoring from blocked user")
+                    self.sendSignaling(SignalingMessage(type: "reject", from: self.localClientId, to: from, sdp: nil, sdpMLineIndex: nil, sdpMid: nil))
                 } else {
                     self.showConnectionAlert = true
                 }
+            }
+
+        case "reject":
+            DispatchQueue.main.async {
+                self.handleConnectionFailed(reason: "Connection attempt rejected")
+            }
+
+        case "not_found":
+            DispatchQueue.main.async {
+                self.handleConnectionFailed(reason: "User not found on signaling server")
             }
 
         case "answer":
