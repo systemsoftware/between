@@ -139,7 +139,8 @@ final class WebRTCManager: NSObject, ObservableObject {
     /// Connects to the signaling server and registers this client to receive incoming offers.
     func register() {
         guard let signalingURL = signalingURL else { return }
-        if webSocketTask == nil {
+        if webSocketTask == nil || webSocketTask?.state == .completed || webSocketTask?.state == .canceling {
+            closeSignalingSocket()
             let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
             guard signalingURL.scheme == "ws" || signalingURL.scheme == "wss" else { return }
             urlSession = session
@@ -156,6 +157,14 @@ final class WebRTCManager: NSObject, ObservableObject {
     func connect(toUserId userId: String) {
         cancelConnectionTimeout()
         
+        // Clean up any existing connection state before trying again
+        dataChannel?.close()
+        dataChannel = nil
+        peerConnection?.close()
+        peerConnection = nil
+        pendingRemoteCandidates.removeAll()
+        pendingEvents.removeAll()
+        
         DispatchQueue.main.async {
             self.isConnecting = true
             self.connectionError = nil
@@ -165,7 +174,8 @@ final class WebRTCManager: NSObject, ObservableObject {
         setupPeerConnection()
         setupOutgoingDataChannel()
         
-        if webSocketTask == nil {
+        if webSocketTask == nil || webSocketTask?.state == .completed || webSocketTask?.state == .canceling {
+            closeSignalingSocket()
             register()
         }
         
@@ -303,6 +313,7 @@ final class WebRTCManager: NSObject, ObservableObject {
             switch result {
             case .failure(let error):
                 debugPrint("WebRTCManager: signaling receive error \(error)")
+                self.closeSignalingSocket()
                 return // socket is gone (or was closed intentionally); stop looping
 
             case .success(let message):
@@ -530,6 +541,22 @@ extension WebRTCManager: URLSessionWebSocketDelegate {
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
         debugPrint("WebRTCManager: signaling socket closed (\(closeCode))")
+        DispatchQueue.main.async { [weak self] in
+            if self?.webSocketTask == webSocketTask {
+                self?.closeSignalingSocket()
+            }
+        }
+    }
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error = error {
+            debugPrint("WebRTCManager: socket completed with error \(error)")
+            DispatchQueue.main.async { [weak self] in
+                if self?.webSocketTask == task {
+                    self?.closeSignalingSocket()
+                }
+            }
+        }
     }
 }
 
