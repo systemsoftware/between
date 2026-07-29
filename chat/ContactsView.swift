@@ -18,6 +18,8 @@ struct ContactsView: View {
     
     @State var showBlocked = false
     
+    @State var showNew = false
+        
     private var filteredContacts: [Contact] {
 
         if searchQuery.isEmpty {
@@ -34,35 +36,78 @@ struct ContactsView: View {
 
     var body: some View {
         NavigationStack {
-            List(filteredContacts) { contact in
-                HistoryRowView(peer:contact.webRTCId, contact: contact, showId:true)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button() {
-                            editing = contact.webRTCId
-                            showEdit = true
-                        } label: {
-                            Label("Edit", systemImage: "pencil")
+            if !filteredContacts.isEmpty {
+                List(filteredContacts) { contact in
+                    HistoryRowView(peer:contact.webRTCId, contact: contact, showId:true)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button() {
+                                editing = contact.webRTCId
+                                showEdit = true
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                deleteContact(from: contact.webRTCId)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
-                        Button(role: .destructive) {
-                            deleteContact(from: contact.webRTCId)
+                }
+                .navigationTitle("Contacts")
+                .sheet(isPresented: $showEdit) {
+                    ContactEditView(contacts: contacts, searchTarget:$editing)
+                }
+                .sheet(isPresented: $showNew) {
+                   NewContactView()
+                    .presentationDetents([.medium])
+                }
+                .sheet(isPresented:$showBlocked) {
+                    BlockedView()
+                }
+                .searchable(text: $searchQuery)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button() {
+                            showBlocked = true
                         } label: {
-                            Label("Delete", systemImage: "trash")
+                            Image(systemName: "hand.raised")
                         }
                     }
-            }
-            .navigationTitle("Contacts")
-            .sheet(isPresented: $showEdit) {
-                ContactEditView(contacts: contacts, searchTarget:$editing)
-            }
-            .sheet(isPresented:$showBlocked) {
-                BlockedView()
-            }
-            .searchable(text: $searchQuery)
-            .toolbar {
-                Button() {
-                    showBlocked = true
-                } label: {
-                    Image(systemName: "hand.raised")
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button() {
+                            showNew = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                    }
+                }
+            } else {
+                ContentUnavailableView {
+                    Label("No contacts", systemImage: "person.crop.circle.badge.xmark")
+                }
+                .navigationTitle("Contacts")
+                .sheet(isPresented: $showNew) {
+                   NewContactView()
+                    .presentationDetents([.medium])
+                }
+                .sheet(isPresented:$showBlocked) {
+                    BlockedView()
+                }
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button() {
+                            showBlocked = true
+                        } label: {
+                            Image(systemName: "hand.raised")
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button() {
+                            showNew = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                    }
                 }
             }
         }
@@ -75,10 +120,61 @@ struct ContactsView: View {
         try? modelContext.delete(model: Contact.self, where: predicate)
         try? modelContext.save()
     }
-
+ 
     
 }
 
+
+struct NewContactView: View {
+    
+    @State var newId = ""
+    @State var newName = ""
+    
+    @Environment(\.modelContext) var modelContext
+    @Environment(\.dismiss) var dismiss
+    
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Contact Info") {
+                    TextField("Name", text: $newName)
+                        .textContentType(.name)
+                        .textInputAutocapitalization(.words)
+                    
+                    TextField("WebRTC ID", text: $newId)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                }
+            }
+            .navigationTitle("Add Contact")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let contact = Contact(
+                            webRTCid: newId,
+                            humanName: newName,
+                            image: nil
+                        )
+                        modelContext.insert(contact)
+                        try? modelContext.save()
+                        newId = ""
+                        newName = ""
+                        dismiss()
+                    }
+                    .disabled(newId.isEmpty || newName.isEmpty)
+                }
+            }
+        }
+    }
+}
 
 struct ContactEditView: View {
     

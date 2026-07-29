@@ -55,18 +55,19 @@ struct HistoryView: View {
                         }
                     }
                 }
+                .searchable(text: $searchQuery)
                 .navigationDestination(for: Message.self) { msg in
                     let peer = msg.from == webRTC.localClientId ? msg.to : msg.from
-                    ChatView(webRTC: webRTC, searchTarget: peer, searchTarget2: webRTC.localClientId, isViewingHistory: true)
+                    ChatView(webRTC: webRTC, searchTarget: peer, searchTarget2: webRTC.localClientId, isViewingHistory: true, isTyping: .constant(false))
                 }
                 .navigationTitle("Chat History")
             } else {
                 ContentUnavailableView {
                     Label("No chat history", systemImage: "clock.badge.xmark")
-                } 
+                }
+                .navigationTitle("Chat History")
             }
         }
-        .searchable(text: $searchQuery)
     }
     
     

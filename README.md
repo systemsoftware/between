@@ -29,7 +29,9 @@ This repository contains both the iOS client application and a lightweight Node.
 
 - **iOS Client:**
   - Xcode 15 or later
-  - iOS 17.0+ device or simulator
+  - iOS 26.0+ device or simulator
+
+> Note: Remove `glassEffect(_:in:)` modifiers to support iOS 17+
   
 - **Signaling Server:**
   - Node.js (v14 or later)

@@ -28,6 +28,7 @@ struct ConnectView: View {
     
     @Query var blockedUsers: [BlockedUser]
     
+    @Binding var tab: String
     
     @State var showHelp = false
     
@@ -162,7 +163,8 @@ struct ConnectView: View {
                                     showError = false
                                     connected = false
                                     webRTC.connectedTo = connectTo
-                                    webRTC.connect(toUserId: connectTo)
+                                    let targetId = webRTC.enableAudio ? connectTo + "-call" : connectTo
+                                    webRTC.connect(toUserId: targetId)
                                 } else {
                                     status = "Signaling server not reachable"
                                     showError = true
@@ -226,8 +228,9 @@ struct ConnectView: View {
                 
                 let key = loadP256KeyAgreementPrivateKey(account:Config.appGroupIdentifier)
                 if let publicKey = key?.publicKey {
-                    pubKey = publicKey.rawRepresentation.base64EncodedString()
-                    webRTC.localClientId = pubKey
+                    let basePubKey = publicKey.rawRepresentation.base64EncodedString()
+                    pubKey = basePubKey
+                    webRTC.localClientId = webRTC.enableAudio ? basePubKey + "-call" : basePubKey
                     let pong = await ping(url)
 
                     if pong {
@@ -242,7 +245,6 @@ struct ConnectView: View {
                 }
             }
         }
-        .navigationTitle("Between")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button {
@@ -268,21 +270,7 @@ struct ConnectView: View {
                 showHelp = false
             }
         }
-        .alert("Incoming Connection", isPresented: $webRTC.showConnectionAlert) {
-            Button("Accept") {
-                webRTC.connectionDecisionCallback?(true)
-                webRTC.connectedTo = webRTC.incomingConnectionPeerId ?? ""
-                webRTC.connectionDecisionCallback = nil
-                webRTC.incomingConnectionPeerId = nil
-            }
-            Button("Reject", role: .cancel) {
-                webRTC.connectionDecisionCallback?(false)
-                webRTC.connectionDecisionCallback = nil
-                webRTC.incomingConnectionPeerId = nil
-            }
-        } message: {
-            Text("\(incomingConnectionName) is requesting to connect.")
-        }
+
         .alert("New ID", isPresented: $showReset) {
             Button("Yes") {
                 if deleteP256KeyAgreementPrivateKey(account: Config.appGroupIdentifier) {
@@ -297,8 +285,9 @@ struct ConnectView: View {
                     
                     let key = loadP256KeyAgreementPrivateKey(account:Config.appGroupIdentifier)
                     if let publicKey = key?.publicKey {
-                        pubKey = publicKey.rawRepresentation.base64EncodedString()
-                        webRTC.localClientId = pubKey
+                        let basePubKey = publicKey.rawRepresentation.base64EncodedString()
+                        pubKey = basePubKey
+                        webRTC.localClientId = webRTC.enableAudio ? basePubKey + "-call" : basePubKey
                         webRTC.register()
                     }
                 }

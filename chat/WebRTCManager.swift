@@ -83,6 +83,7 @@ final class WebRTCManager: NSObject, ObservableObject {
 
     @Published var showConnectionAlert = false
     @Published var incomingConnectionPeerId: String? = nil
+    @Published var incomingConnectionType: String = "Text"
     var connectionDecisionCallback: ((Bool) -> Void)? = nil
 
     var localClientId: String
@@ -106,6 +107,9 @@ final class WebRTCManager: NSObject, ObservableObject {
     private var dataChannel: RTCDataChannel?
     private let iceServers = ["stun:stun.l.google.com:19302"]
     
+    var enableAudio: Bool = false
+    private var localAudioTrack: RTCAudioTrack?
+    
     var connectedTo = ""
 
     // MARK: Private - Signaling
@@ -120,8 +124,9 @@ final class WebRTCManager: NSObject, ObservableObject {
 
     // MARK: Init
 
-    init(localClientId: String = UUID().uuidString) {
+    init(localClientId: String = UUID().uuidString, enableAudio: Bool = false) {
         self.localClientId = localClientId
+        self.enableAudio = enableAudio
         super.init()
     }
 
@@ -171,15 +176,19 @@ final class WebRTCManager: NSObject, ObservableObject {
         }
         
         targetClientId = userId
-        setupPeerConnection()
-        setupOutgoingDataChannel()
         
-        if webSocketTask == nil || webSocketTask?.state == .completed || webSocketTask?.state == .canceling {
-            closeSignalingSocket()
-            register()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            self.setupPeerConnection()
+            self.setupOutgoingDataChannel()
+            
+            if self.webSocketTask == nil || self.webSocketTask?.state == .completed || self.webSocketTask?.state == .canceling {
+                self.closeSignalingSocket()
+                self.register()
+            }
+            
+            self.createOffer(to: userId)
         }
-        
-        createOffer(to: userId)
         
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
@@ -245,6 +254,11 @@ final class WebRTCManager: NSObject, ObservableObject {
         delegate?.webRTCManagerDidDisconnect(self)
     }
 
+    /// Toggles the local audio track enabled state.
+    func setAudioEnabled(_ isEnabled: Bool) {
+        localAudioTrack?.isEnabled = isEnabled
+    }
+
     // MARK: - Peer connection / data channel setup
 
     private func setupPeerConnection() {
@@ -258,6 +272,14 @@ final class WebRTCManager: NSObject, ObservableObject {
             optionalConstraints: ["DtlsSrtpKeyAgreement": kRTCMediaConstraintsValueTrue]
         )
         peerConnection = WebRTCManager.factory.peerConnection(with: config, constraints: constraints, delegate: self)
+        
+        if enableAudio {
+            let audioSource = WebRTCManager.factory.audioSource(with: nil)
+            localAudioTrack = WebRTCManager.factory.audioTrack(with: audioSource, trackId: "audio0")
+            if let track = localAudioTrack {
+                peerConnection?.add(track, streamIds: ["stream0"])
+            }
+        }
     }
 
     /// Only the side that initiates `connect(toUserId:)` creates the data channel;
@@ -334,12 +356,19 @@ final class WebRTCManager: NSObject, ObservableObject {
         case "offer":
             guard let sdp = message.sdp, let from = message.from else { return }
             
+            let isAudio = sdp.contains("m=audio")
+            
             // Ask the app layer if we should accept this connection
             DispatchQueue.main.async {
                 self.incomingConnectionPeerId = from
+                self.incomingConnectionType = isAudio ? "Voice Call" : "Text Chat"
                 self.connectionDecisionCallback = { [weak self] accepted in
                     guard let self = self else { return }
                     if accepted {
+                        // If they accepted an audio call, make sure this manager is enabled for audio
+                        if isAudio {
+                            self.enableAudio = true
+                        }
                         self.acceptOffer(from: from, sdp: sdp)
                     } else {
                         debugPrint("WebRTCManager: Connection from \(from) rejected by user.")
@@ -396,13 +425,16 @@ final class WebRTCManager: NSObject, ObservableObject {
 
     private func acceptOffer(from: String, sdp: String) {
         targetClientId = from
-        if peerConnection == nil {
-            setupPeerConnection()
-        }
-        let remoteSdp = RTCSessionDescription(type: .offer, sdp: sdp)
-        peerConnection?.setRemoteDescription(remoteSdp) { [weak self] _ in
-            self?.drainPendingCandidates()
-            self?.createAnswer(to: from)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            if self.peerConnection == nil {
+                self.setupPeerConnection()
+            }
+            let remoteSdp = RTCSessionDescription(type: .offer, sdp: sdp)
+            self.peerConnection?.setRemoteDescription(remoteSdp) { [weak self] _ in
+                self?.drainPendingCandidates()
+                self?.createAnswer(to: from)
+            }
         }
     }
 

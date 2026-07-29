@@ -29,7 +29,9 @@ struct ChatView: View {
     
     @State var showRename = false
     
-    init(webRTC: WebRTCManager, searchTarget: String, searchTarget2:String, isViewingHistory:Bool = false) {
+    @Binding var isTyping: Bool
+    
+    init(webRTC: WebRTCManager, searchTarget: String, searchTarget2: String, isViewingHistory: Bool = false, isTyping binding: Binding<Bool>) {
         self.webRTC = webRTC
         self.searchTarget = searchTarget
         self.searchTarget2 = searchTarget2
@@ -45,8 +47,10 @@ struct ChatView: View {
             (msg.from == myPubKey && msg.to == searchTarget)
         }, sort: \Message.timestamp)
         
+        _isTyping = binding
     }
 
+    @FocusState private var isInputFocused: Bool
     
     var body: some View {
         
@@ -69,69 +73,7 @@ struct ChatView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if !isViewingHistory {
-                VStack {
-                    
-                    if let replyID = replyingTo {
-                        HStack {
-                            if let msg = messages.first(where: { $0.event == replyID }) {
-                                Text("Replying to: \(msg.content.hasPrefix("B64__IMAGE:") ? "Image" : msg.content)")
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            } else {
-                                Text("Replying to message")
-                            }
-                            Spacer()
-                            Button {
-                                replyingTo = nil
-                            } label: {
-                                Image(systemName:"xmark")
-                            }
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                        
-                    }
-                    
-                    if webRTC.isReadyToSend {
-                        HStack {
-                            PhotosPicker(selection: $selectedItem, matching: .images) {
-                                Image(systemName: "photo")
-                            }
-                            
-                            TextField("Message", text:$text)
-                            Button() {
-                                
-                                
-                                if let enc = encryptP2PMessage(text, peerPublicKeyBase64: searchTarget) {
-                                    
-                                    
-                                    let event = Event(
-                                        type: .send, payload: enc,
-                                        replyingTo: replyingTo?.uuidString
-                                    )
-                                    
-                                    let msg = Message(content: text, from: pubKey, to: searchTarget, event:event.id, replyingTo:replyingTo)
-                                    modelContext.insert(msg)
-                                    
-                                    webRTC.send(event)
-                                    
-                                    text = ""
-                                    
-                                    replyingTo = nil
-                                    
-                                } else {
-                                    print("Could not encrypt message")
-                                }
-                            } label:{
-                                Image(systemName: "paperplane.fill")
-                            }
-                            .disabled(text.isEmpty)
-                            .keyboardShortcut(.defaultAction)
-                        }
-                        .padding()
-                        .glassEffect(in: .rect(cornerRadius: 16.0))
-                    }
-                }
+                bottomInputArea
             }
         }
         .padding(.horizontal)
@@ -217,6 +159,83 @@ struct ChatView: View {
                 }
             }
             
+        }
+    }
+    
+    private var bottomInputArea: some View {
+        VStack {
+            if let replyID = replyingTo {
+                HStack {
+                    if let msg = messages.first(where: { $0.event == replyID }) {
+                        let isImage = msg.content.hasPrefix("B64__IMAGE:")
+                        Text("Replying to: \(isImage ? "Image" : msg.content)")
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    } else {
+                        Text("Replying to message")
+                    }
+                    Spacer()
+                    Button {
+                        replyingTo = nil
+                    } label: {
+                        Image(systemName:"xmark")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.gray)
+            }
+            
+            if webRTC.isReadyToSend {
+                
+                if isTyping {
+                    let name = contacts.first(where: { $0.webRTCId == searchTarget })?.humanName
+                    Text("\(name ?? "They") \( (name != nil) ? "is" : "are" ) typing...")
+                        .font(.caption)
+                        .foregroundStyle(.gray)
+                }
+                
+                HStack {
+                    PhotosPicker(selection: $selectedItem, matching: .images) {
+                        Image(systemName: "photo")
+                    }
+                    
+                    TextField("Message", text:$text)
+                        .onChange(of: text) { _,f in
+                            if text.isEmpty {
+                                let evt = Event(type:.typing, payload: "false")
+                                webRTC.send(evt)
+                            }
+                            else {
+                                let evt = Event(type:.typing, payload: "true")
+                                webRTC.send(evt)
+                            }
+                        }
+                    Button() {
+                        if let enc = encryptP2PMessage(text, peerPublicKeyBase64: searchTarget) {
+                            let event = Event(
+                                type: .send, payload: enc,
+                                replyingTo: replyingTo?.uuidString
+                            )
+                            
+                            let msg = Message(content: text, from: pubKey, to: searchTarget, event:event.id, replyingTo:replyingTo)
+                            modelContext.insert(msg)
+                            
+                            webRTC.send(event)
+                            
+                            text = ""
+                            replyingTo = nil
+                        } else {
+                            print("Could not encrypt message")
+                        }
+                    } label:{
+                        Image(systemName: "paperplane.fill")
+                    }
+                    .disabled(text.isEmpty)
+                    .keyboardShortcut(.defaultAction)
+                }
+                .padding()
+                .glassEffect(.regular, in: .rect(cornerRadius: 16.0))
+            }
         }
     }
 }

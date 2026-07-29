@@ -25,6 +25,8 @@ enum EventTypes: String, Codable {
     case answer = "answer"
     case candidate = "candidate"
     case incoming = "incoming"
+    case typing = "typing"
+    case endCall = "endCall"
 }
 
 struct Event: Codable, Identifiable {

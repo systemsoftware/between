@@ -16,17 +16,24 @@ struct BlockedView: View {
 
     var body: some View {
         NavigationStack {
-            List(contacts) { contact in
-                Text(contact.webRTCid)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            deleteContact(from: contact.webRTCid)
-                        } label: {
-                            Label("Unblock", systemImage: "hand.raised.slash")
+            if !contacts.isEmpty {
+                List(contacts) { contact in
+                    Text(contact.webRTCid)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                deleteContact(from: contact.webRTCid)
+                            } label: {
+                                Label("Unblock", systemImage: "hand.raised.slash")
+                            }
                         }
-                    }
+                }
+                .navigationTitle("Blocked")
+            } else {
+                ContentUnavailableView {
+                    Label("No blocked contacts", systemImage: "hand.raised.slash")
+                }
+                .navigationTitle("Blocked")
             }
-            .navigationTitle("Blocked")
         }
     }
     
