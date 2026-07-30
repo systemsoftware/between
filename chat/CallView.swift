@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+internal import Combine
 
 struct CallView: View {
     
@@ -8,6 +9,11 @@ struct CallView: View {
     @Query var contacts: [Contact]
     
     @State private var isMuted = false
+    
+    @State private var startTime = Date()
+    @State private var timeElapsed: Double = 0
+    
+    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     var contact: Contact? {
         contacts.first(where: { $0.webRTCId == searchTarget })
@@ -37,7 +43,8 @@ struct CallView: View {
                 .truncationMode(.middle)
                 .padding(.horizontal)
             
-            Text("In Call")
+            Text(Duration.seconds(timeElapsed), format: .time(pattern: .hourMinuteSecond))
+                .monospacedDigit()
                 .font(.subheadline)
                 .foregroundColor(.green)
             
@@ -73,6 +80,9 @@ struct CallView: View {
                 }
             }
             .padding(.bottom, 40)
+        }
+        .onReceive(timer) { _ in
+                  timeElapsed = Date().timeIntervalSince(startTime)
         }
         .padding()
         .navigationBarTitleDisplayMode(.inline)
